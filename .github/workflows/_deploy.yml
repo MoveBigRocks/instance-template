@@ -51,7 +51,6 @@ jobs:
         env:
           SERVICES_ARTIFACT: ${{ steps.config.outputs.services_artifact }}
           MIGRATIONS_ARTIFACT: ${{ steps.config.outputs.migrations_artifact }}
-          DEPLOY_ARTIFACT: ${{ steps.config.outputs.deploy_artifact }}
           MANIFEST_ARTIFACT: ${{ steps.config.outputs.manifest_artifact }}
         run: |
           mkdir -p artifacts
@@ -66,10 +65,7 @@ jobs:
           tar -xzf migrations.tar.gz -C migrations
           rm migrations.tar.gz
 
-          mkdir -p deploy
-          oras pull "${DEPLOY_ARTIFACT}"
-          tar -xzf deploy.tar.gz -C deploy
-          rm deploy.tar.gz
+          cp -R ../deploy ./deploy
 
           oras pull "${MANIFEST_ARTIFACT}"
           echo "Release manifest:"
@@ -365,7 +361,6 @@ jobs:
           DEPLOY_PORT: ${{ steps.slot.outputs.deploy_port }}
           SERVICES_ARTIFACT: ${{ steps.config.outputs.services_artifact }}
           MIGRATIONS_ARTIFACT: ${{ steps.config.outputs.migrations_artifact }}
-          DEPLOY_ARTIFACT: ${{ steps.config.outputs.deploy_artifact }}
           APP_DOMAIN: ${{ steps.config.outputs.app_domain }}
           ADMIN_DOMAIN: ${{ steps.config.outputs.admin_domain }}
           API_DOMAIN: ${{ steps.config.outputs.api_domain }}
@@ -385,7 +380,7 @@ jobs:
           ### Artifacts Deployed
           - \`${SERVICES_ARTIFACT}\`
           - \`${MIGRATIONS_ARTIFACT}\`
-          - \`${DEPLOY_ARTIFACT}\`
+          - local deploy assets from this instance repo
 
           ### Endpoints
           - https://${APP_DOMAIN}

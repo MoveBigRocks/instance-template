@@ -18,10 +18,9 @@ spec:
     release:
       core:
         version: v0.8.1
-        servicesArtifact: ghcr.io/demandops/mbr-services:v0.8.1
-        deployArtifact: ghcr.io/demandops/mbr-deploy:v0.8.1
-        migrationsArtifact: ghcr.io/demandops/mbr-migrations:v0.8.1
-        manifestArtifact: ghcr.io/demandops/mbr-manifest:v0.8.1
+        servicesArtifact: ghcr.io/movebigrocks/mbr-services:v0.8.1
+        migrationsArtifact: ghcr.io/movebigrocks/mbr-migrations:v0.8.1
+        manifestArtifact: ghcr.io/movebigrocks/mbr-manifest:v0.8.1
   auth:
     mode: magic-link
     breakGlassAdminEmail: owner@example.com

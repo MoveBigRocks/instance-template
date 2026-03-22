@@ -2,7 +2,7 @@ extensions:
   installed:
     - slug: ats
       source: oci
-      ref: ghcr.io/demandops/mbr-ext-ats:v1.0.0
+      ref: ghcr.io/movebigrocks/mbr-ext-ats:v1.0.0
       publisher: DemandOps
       kind: product
       scope: workspace
@@ -15,7 +15,7 @@ extensions:
         requiresStagingValidation: true
     - slug: web-analytics
       source: oci
-      ref: ghcr.io/demandops/mbr-ext-web-analytics:v1.0.0
+      ref: ghcr.io/movebigrocks/mbr-ext-web-analytics:v1.0.0
       publisher: DemandOps
       kind: product
       scope: workspace
