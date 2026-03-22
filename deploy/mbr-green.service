@@ -1,0 +1,42 @@
+[Unit]
+Description=Move Big Rocks Green Slot (port 8081)
+Documentation=https://github.com/movebigrocks/platform
+After=network.target
+
+[Service]
+Type=simple
+User=mbr
+Group=mbr
+WorkingDirectory=/opt/mbr
+
+# Green slot binary and port
+ExecStart=/opt/mbr/mbr-green
+Environment=PORT=8081
+
+# Environment file for secrets and configuration
+# NOTE: PORT must NOT be set in .env - each slot controls its own port
+EnvironmentFile=/opt/mbr/.env
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Security hardening
+# Keep filesystem protections relaxed enough for local config, deploy assets,
+# and optional filesystem-backed storage under /opt/mbr.
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+
+# Resource limits
+MemoryMax=2G
+LimitNOFILE=65536
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mbr-green
+
+[Install]
+WantedBy=multi-user.target

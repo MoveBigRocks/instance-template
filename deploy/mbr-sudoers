@@ -1,0 +1,47 @@
+# Sudoers configuration for mbr user
+# Installed by setup.sh to /etc/sudoers.d/mbr
+#
+# Allows the mbr user to manage services and deploy binaries
+# without password prompts (required for CI/CD automation)
+
+# Blue-green service management
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl start mbr-blue
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl stop mbr-blue
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl restart mbr-blue
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl status mbr-blue
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl enable mbr-blue
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl disable mbr-blue
+
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl start mbr-green
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl stop mbr-green
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl restart mbr-green
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl status mbr-green
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl enable mbr-green
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl disable mbr-green
+
+# Legacy single-service cleanup
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl stop mbr
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl disable mbr
+
+# Systemd reload
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl daemon-reload
+
+# Caddy management
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl reload caddy
+
+# File operations for deployment
+mbr ALL=(ALL) NOPASSWD: /bin/cp /tmp/mbr-extract/mbr-server /opt/mbr/mbr-blue
+mbr ALL=(ALL) NOPASSWD: /bin/cp /tmp/mbr-extract/mbr-server /opt/mbr/mbr-green
+mbr ALL=(ALL) NOPASSWD: /bin/cp /opt/mbr/mbr-blue.service /etc/systemd/system/
+mbr ALL=(ALL) NOPASSWD: /bin/cp /opt/mbr/mbr-green.service /etc/systemd/system/
+mbr ALL=(ALL) NOPASSWD: /bin/chown mbr\:mbr /opt/mbr/mbr-blue
+mbr ALL=(ALL) NOPASSWD: /bin/chown mbr\:mbr /opt/mbr/mbr-green
+mbr ALL=(ALL) NOPASSWD: /bin/chown mbr\:mbr /opt/mbr/.active-slot
+mbr ALL=(ALL) NOPASSWD: /bin/chmod +x /opt/mbr/mbr-blue
+mbr ALL=(ALL) NOPASSWD: /bin/chmod +x /opt/mbr/mbr-green
+mbr ALL=(ALL) NOPASSWD: /bin/rm -f /etc/systemd/system/mbr.service
+mbr ALL=(ALL) NOPASSWD: /usr/bin/tee /opt/mbr/.active-slot
+
+# Log access for monitoring and debugging
+mbr ALL=(ALL) NOPASSWD: /bin/journalctl -u mbr-blue *
+mbr ALL=(ALL) NOPASSWD: /bin/journalctl -u mbr-green *

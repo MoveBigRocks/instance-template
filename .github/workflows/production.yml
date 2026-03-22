@@ -1,0 +1,41 @@
+name: Production Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mbr-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  check-environment:
+    name: Check Environment
+    if: github.repository != 'MoveBigRocks/instance-template'
+    uses: ./.github/workflows/_check-environment.yml
+    with:
+      environment: production
+    secrets: inherit
+
+  deploy:
+    name: Deploy Production
+    if: github.repository != 'MoveBigRocks/instance-template'
+    needs: check-environment
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: production
+    secrets: inherit
+
+  verify:
+    name: Verify Production
+    if: github.repository != 'MoveBigRocks/instance-template'
+    needs: deploy
+    uses: ./.github/workflows/verify-production.yml
+    with:
+      environment: production
+    secrets: inherit

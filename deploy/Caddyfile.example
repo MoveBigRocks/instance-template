@@ -1,0 +1,54 @@
+{
+	email support@movebigrocks.com
+}
+
+# Standalone public Move Big Rocks site and runtime host routing.
+# Copy to /etc/caddy/Caddyfile when Caddy is managed on the same host.
+
+movebigrocks.com, www.movebigrocks.com {
+	encode zstd gzip
+
+	log {
+		output file /var/log/caddy/movebigrocks-site.log
+	}
+
+	reverse_proxy 127.0.0.1:8080 127.0.0.1:8081 {
+		lb_policy first
+		health_uri /health
+		health_interval 2s
+		health_timeout 5s
+		fail_duration 10s
+	}
+}
+
+admin.movebigrocks.com {
+	encode zstd gzip
+
+	log {
+		output file /var/log/caddy/movebigrocks-admin.log
+	}
+
+	reverse_proxy 127.0.0.1:8080 127.0.0.1:8081 {
+		lb_policy first
+		health_uri /health
+		health_interval 2s
+		health_timeout 5s
+		fail_duration 10s
+	}
+}
+
+api.movebigrocks.com {
+	encode zstd gzip
+
+	log {
+		output file /var/log/caddy/movebigrocks-api.log
+	}
+
+	reverse_proxy 127.0.0.1:8080 127.0.0.1:8081 {
+		lb_policy first
+		health_uri /health
+		health_interval 2s
+		health_timeout 5s
+		fail_duration 10s
+	}
+}
