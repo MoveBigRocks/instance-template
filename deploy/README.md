@@ -126,6 +126,10 @@ For a real Move Big Rocks site launch, also use:
 
 - [Site Launch Checklist](https://github.com/movebigrocks/platform/blob/main/docs/SITE_LAUNCH_CHECKLIST.md)
 
+## Upgrading Core
+
+See [UPGRADE.md](UPGRADE.md) for the step-by-step process to deploy a new platform release.
+
 ## Service Management
 
 ```bash

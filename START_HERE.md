@@ -23,6 +23,7 @@ The target outcome is:
 4. `extensions/desired-state.yaml`
 5. `deploy/README.md`
 6. `.github/workflows/production.yml`
+6b. `deploy/UPGRADE.md` — step-by-step core version upgrade process
 7. `branding/site.json`
 8. `security/extension-threat-model.md`
 9. `security/review-checklist.md`
