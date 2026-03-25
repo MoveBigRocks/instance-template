@@ -179,9 +179,18 @@ journalctl -u mbr-green -n 100 --no-pager
 
 ### Grafana not loading
 
-1. Check `curl http://127.0.0.1:3000/api/health`
-2. Verify Caddy `/grafana/*` route
-3. Confirm Grafana embedding settings in `/etc/grafana/grafana.ini`
+1. Check `curl http://127.0.0.1:3000/grafana/api/health` (must use `/grafana/` prefix)
+2. Verify Grafana is configured for sub-path serving in `/etc/grafana/grafana.ini`:
+   - `root_url = %(protocol)s://%(domain)s:%(http_port)s/grafana/`
+   - `serve_from_sub_path = true`
+   - `allow_embedding = true` (under `[security]`)
+   - `enabled = true` under `[auth.anonymous]`
+3. Verify the admin subdomain Caddy block does NOT have a `handle /grafana/*` direct proxy — the app handles Grafana proxying with auth
+4. Verify `header /grafana/* { -X-Frame-Options }` is set in the admin Caddy block
+
+### Admin metrics page returns 404
+
+The admin subdomain must NOT have a `handle /metrics { respond 404 }` block in Caddy. This block is correct on public and API subdomains (to prevent external Prometheus scraping), but on the admin subdomain it blocks the app's own `/metrics` page which serves Grafana dashboards behind session auth.
 
 ### Database connectivity
 

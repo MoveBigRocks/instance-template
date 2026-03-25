@@ -28,6 +28,23 @@ admin.movebigrocks.com {
 		output file /var/log/caddy/movebigrocks-admin.log
 	}
 
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Allow Grafana iframe embedding — the app proxy handles auth via HMAC cookie.
+	# Do NOT add X-Frame-Options globally on admin subdomains.
+	# Do NOT add `handle /metrics { respond 404 }` — the app serves its own
+	# metrics page (embedded Grafana dashboards) behind session auth.
+	# Do NOT add `handle /grafana/*` with a direct proxy to Grafana — the app
+	# has its own authenticated reverse proxy that validates access cookies.
+	header /grafana/* {
+		-X-Frame-Options
+	}
+
 	reverse_proxy 127.0.0.1:8080 127.0.0.1:8081 {
 		lb_policy first
 		health_uri /health

@@ -72,6 +72,10 @@ echo "Configuring Grafana..."
 sed -i 's/^;http_addr =.*/http_addr = 127.0.0.1/' /etc/grafana/grafana.ini
 sed -i 's/^http_addr =.*/http_addr = 127.0.0.1/' /etc/grafana/grafana.ini
 
+# Serve from /grafana/ sub-path (the app reverse-proxies /grafana/* to Grafana)
+sed -i 's|^;root_url = %(protocol)s://%(domain)s:%(http_port)s/$|root_url = %(protocol)s://%(domain)s:%(http_port)s/grafana/|' /etc/grafana/grafana.ini
+sed -i 's|^;serve_from_sub_path = false$|serve_from_sub_path = true|' /etc/grafana/grafana.ini
+
 # Enable anonymous access for dashboard embedding
 sed -i '/^\[auth.anonymous\]$/a enabled = true\norg_name = Main Org.\norg_role = Viewer' /etc/grafana/grafana.ini 2>/dev/null || true
 # Allow iframe embedding
