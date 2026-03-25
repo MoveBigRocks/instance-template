@@ -205,6 +205,14 @@ failregex = \"path\":\s*\"[^\"]*/(wp-admin|wp-login|wp-config|wp-content|wp-incl
 ignoreregex =
 EOF
 
+# Install analytics-specific fail2ban filter and jail
+if [ -f "${SCRIPT_DIR}/fail2ban/mbr-analytics.conf" ]; then
+    cp "${SCRIPT_DIR}/fail2ban/mbr-analytics.conf" /etc/fail2ban/filter.d/
+fi
+if [ -f "${SCRIPT_DIR}/fail2ban/mbr-analytics-jail.conf" ]; then
+    cp "${SCRIPT_DIR}/fail2ban/mbr-analytics-jail.conf" /etc/fail2ban/jail.d/
+fi
+
 systemctl enable fail2ban
 systemctl restart fail2ban
 

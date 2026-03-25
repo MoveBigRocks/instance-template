@@ -12,9 +12,10 @@ WorkingDirectory=/opt/mbr
 # Green slot binary and port
 ExecStart=/opt/mbr/mbr-green
 Environment=PORT=8081
+Environment=HOST=127.0.0.1
 
 # Environment file for secrets and configuration
-# NOTE: PORT must NOT be set in .env - each slot controls its own port
+# NOTE: PORT and HOST must NOT be set in .env - each slot controls its own port
 EnvironmentFile=/opt/mbr/.env
 
 # Restart policy
