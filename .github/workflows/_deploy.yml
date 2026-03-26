@@ -298,6 +298,11 @@ jobs:
             echo "${DEPLOY_SLOT}" | sudo tee "${ROOT_DIR}/.active-slot" >/dev/null
             sudo chown mbr:mbr "${ROOT_DIR}/.active-slot"
 
+            # Update Prometheus file-based service discovery target (if configured)
+            if command -v update-prometheus-target >/dev/null 2>&1; then
+              sudo update-prometheus-target mbr "${DEPLOY_SLOT}"
+            fi
+
             rm -rf /tmp/mbr-extract /tmp/mbr-deploy.tar.gz
           EOF
 

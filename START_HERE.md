@@ -12,7 +12,7 @@ The target outcome is:
 - admin access working
 - app, admin, and API health checks passing
 - outbound email configured
-- optional first-party extensions installed only if licensed
+- optional first-party extensions installed when requested
 - no secrets written into tracked files
 
 ## Read These Files First
@@ -35,7 +35,7 @@ The target outcome is:
 - Do not change Move Big Rocks core source code from this repo.
 - Do not write secrets into git-tracked files.
 - Do not change the pinned core version unless explicitly asked.
-- Do not activate paid extensions without a valid license.
+- Do not treat the public first-party bundles as paid-only extensions.
 - Do not activate self-built extensions before the threat model and review checklist are complete.
 - Do not use the generic runtime for privileged auth or connector extensions.
 
@@ -55,7 +55,7 @@ The target outcome is:
 7. Create the first admin user if needed.
 8. Create the primary workspace if needed.
 9. Review `extensions/desired-state.yaml`.
-10. Install, validate, configure, and activate any licensed extensions that are requested.
+10. Install, validate, configure, and activate any requested extensions, using the public signed first-party bundle refs when applicable.
 11. Apply branding overrides from `branding/site.json`.
 12. Report what changed, what is still missing, and any risks.
 
@@ -68,7 +68,7 @@ You may need:
 - outbound email credentials for the selected provider
 - object storage credentials when using `s3-compatible` storage
 - admin email address
-- paid extension refs or license grants
+- extension refs and any instance-specific configuration values
 
 The human should usually provide only those inputs.
 The agent should handle validation, repo setup steps, deployment, health

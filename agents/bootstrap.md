@@ -12,7 +12,7 @@ Take a new customer from an empty Linux host to a working Move Big Rocks instanc
 - admin access created
 - health checks passing
 - outbound email configured
-- optional paid extensions installed and activated when licensed
+- optional first-party extensions installed and activated when requested
 
 ## Required Inputs
 
@@ -45,11 +45,11 @@ Take a new customer from an empty Linux host to a working Move Big Rocks instanc
    - outbound email delivery
 10. Create the admin user if needed.
 11. Create the primary workspace if needed.
-12. Create or confirm one dedicated sandbox workspace for extension preview if the instance will run optional packs.
+12. Create or confirm one dedicated preview workspace for extension preview if the instance will run optional packs.
 13. Review `extensions/desired-state.yaml`.
-14. Install any licensed extensions.
+14. Install any requested extensions.
 15. Run the extension threat model and review checklist before activation.
-16. Activate new or upgraded workspace-scoped extensions in the sandbox workspace first.
+16. Activate new or upgraded workspace-scoped extensions in the preview workspace first.
 17. Apply branding overrides from `branding/site.json`.
 18. Enable public routes only after review gates pass.
 19. Report the final state, gaps, and risks.
@@ -57,7 +57,7 @@ Take a new customer from an empty Linux host to a working Move Big Rocks instanc
 ## Guardrails
 
 - Do not change the pinned core version unless explicitly asked.
-- Do not activate paid extensions without a valid license grant.
+- Do not assume the public first-party bundles require a license token.
 - Do not activate self-built extensions before the threat-model and review checklist are complete.
 - Do not use the generic runtime for privileged auth or connector extensions.
 - Do not write secrets into tracked files.
