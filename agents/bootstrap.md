@@ -43,7 +43,7 @@ Take a new customer from an empty Linux host to a working Move Big Rocks instanc
    - GraphQL availability
    - admin login flow
    - outbound email delivery
-10. If `spec.fleet` is enabled, run the manual `Register Fleet` workflow and confirm the operator understands the disclosed registration and heartbeat behavior.
+10. Review `spec.fleet`. If the operator wants this instance registered for support, grandfathering, or future commercial transitions, run the manual `Register Fleet` workflow and confirm they understand the disclosed registration and heartbeat behavior.
 11. Create the admin user if needed.
 12. Create the primary workspace if needed.
 13. Create or confirm one dedicated preview workspace for extension preview if the instance will run optional extensions.
