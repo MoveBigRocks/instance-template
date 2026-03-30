@@ -10,6 +10,7 @@ fi
 
 ruby - "${CONFIG_FILE}" <<'RUBY'
 require "yaml"
+require "uri"
 
 config = YAML.load_file(ARGV[0])
 
@@ -43,6 +44,33 @@ def assert_allowed(name, value, allowed)
   raise "#{name} must be one of: #{allowed.join(', ')}"
 end
 
+def normalize_api_base_url(raw)
+  value = raw.to_s.strip
+  raise "spec.fleet.endpoint is required" if value.empty?
+
+  uri = URI.parse(value)
+  if uri.scheme.to_s.empty? || uri.host.to_s.empty?
+    raise "spec.fleet.endpoint must include scheme and host"
+  end
+
+  host = uri.host
+  case
+  when ["localhost", "127.0.0.1", "::1"].include?(host)
+    # keep local host as-is
+  when host.start_with?("api.")
+    # already normalized
+  when host.start_with?("admin.")
+    uri.host = "api." + host.sub(/\Aadmin\./, "")
+  else
+    uri.host = "api." + host
+  end
+
+  uri.path = ""
+  uri.query = nil
+  uri.fragment = nil
+  uri.to_s.sub(%r{/\z}, "")
+end
+
 def emit(key, value)
   normalized = value.to_s.gsub(/\r?\n/, " ").strip
   puts "#{key}=#{normalized}"
@@ -59,6 +87,9 @@ email = fetch_required(spec, %w[email])
 outbound = fetch_required(email, %w[outbound])
 inbound = fetch_required(email, %w[inbound])
 storage = fetch_required(spec, %w[storage])
+fleet = fetch_required(spec, %w[fleet])
+fleet_registration = fetch_required(fleet, %w[registration])
+fleet_heartbeat = fetch_required(fleet, %w[heartbeat])
 
 environment = fetch_required(spec, %w[environment])
 app_domain = fetch_required(domain, %w[app])
@@ -84,6 +115,12 @@ attachments_bucket = fetch_required(storage, %w[attachmentsBucket])
 smtp_host = fetch_optional(outbound, %w[smtp host])
 smtp_port = fetch_optional(outbound, %w[smtp port], "587")
 ses_region = fetch_optional(outbound, %w[ses region])
+fleet_endpoint = fetch_required(fleet, %w[endpoint])
+fleet_operator_email = fetch_required(fleet_registration, %w[operatorEmail])
+fleet_use_case = fetch_required(fleet_registration, %w[useCase])
+fleet_registration_source = fetch_optional(fleet_registration, %w[source], "self_hosted")
+fleet_heartbeat_enabled = fetch_required(fleet_heartbeat, %w[enabled])
+fleet_api_url = normalize_api_base_url(fleet_endpoint)
 
 raise "spec.deployment.release.core.servicesArtifact is required" if services_artifact.to_s.empty?
 raise "spec.deployment.linuxTarget.host must not include a user prefix" if deploy_host.include?("@")
@@ -93,6 +130,8 @@ assert_allowed("spec.email.outbound.provider", email_provider, %w[postmark smtp 
 assert_allowed("spec.email.inbound.mode", inbound_mode, %w[webhook none])
 assert_allowed("spec.email.inbound.provider", inbound_provider, %w[postmark ses none])
 assert_allowed("spec.storage.provider", storage_provider, %w[s3-compatible filesystem])
+assert_allowed("spec.fleet.registration.useCase", fleet_use_case, %w[internal_ops startup client_deployment personal other])
+assert_allowed("spec.fleet.registration.source", fleet_registration_source, %w[self_hosted managed])
 
 if storage_provider == "s3-compatible" && storage_region.to_s.empty?
   raise "spec.storage.region is required when using s3-compatible storage"
@@ -133,4 +172,10 @@ emit("attachments_bucket", attachments_bucket)
 emit("smtp_host", smtp_host)
 emit("smtp_port", smtp_port)
 emit("ses_region", ses_region)
+emit("fleet_endpoint", fleet_endpoint)
+emit("fleet_api_url", fleet_api_url)
+emit("fleet_operator_email", fleet_operator_email)
+emit("fleet_use_case", fleet_use_case)
+emit("fleet_registration_source", fleet_registration_source)
+emit("fleet_heartbeat_enabled", fleet_heartbeat_enabled)
 RUBY

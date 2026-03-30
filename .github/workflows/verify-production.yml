@@ -134,6 +134,23 @@ jobs:
               -c "SELECT COUNT(*) AS total, SUM(CASE WHEN published_at IS NULL THEN 1 ELSE 0 END) AS pending FROM core_infra.outbox_events;"
           EOF
 
+      - name: Verify fleet heartbeat timer when registered
+        env:
+          DEPLOY_HOST: ${{ steps.config.outputs.deploy_host }}
+          ROOT_DIR: ${{ steps.config.outputs.root_dir }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no "mbr@${DEPLOY_HOST}" <<EOF
+            set -euo pipefail
+            if [ -f "${ROOT_DIR}/.fleet-config.env" ]; then
+              set -a
+              source "${ROOT_DIR}/.fleet-config.env"
+              set +a
+              if [ "${MBR_FLEET_HEARTBEAT_ENABLED:-false}" = "true" ] && [ -f "${ROOT_DIR}/.fleet-secret.env" ]; then
+                sudo systemctl is-enabled mbr-fleet-heartbeat.timer >/dev/null
+              fi
+            fi
+          EOF
+
       - name: Check recent logs
         env:
           DEPLOY_HOST: ${{ steps.config.outputs.deploy_host }}

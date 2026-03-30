@@ -38,6 +38,7 @@ The target outcome is:
 - Do not treat the public first-party bundles as paid-only extensions.
 - Do not activate self-built extensions before the threat model and review checklist are complete.
 - Do not use the generic runtime for privileged auth or connector extensions.
+- Do not add silent phone-home behavior beyond the disclosed fleet registration and optional heartbeat owned by this repo.
 
 ## What You Should Do
 
@@ -52,12 +53,13 @@ The target outcome is:
    - API health
    - admin login
    - outbound email
-7. Create the first admin user if needed.
-8. Create the primary workspace if needed.
-9. Review `extensions/desired-state.yaml`.
-10. Install, validate, configure, and activate any requested extensions, using the public signed first-party bundle refs when applicable.
-11. Apply branding overrides from `branding/site.json`.
-12. Report what changed, what is still missing, and any risks.
+7. If `spec.fleet` is enabled, run the manual `Register Fleet` workflow after the first successful deploy and verify the disclosure language with the operator.
+8. Create the first admin user if needed.
+9. Create the primary workspace if needed.
+10. Review `extensions/desired-state.yaml`.
+11. Install, validate, configure, and activate any requested extensions, using the public signed first-party bundle refs when applicable.
+12. Apply branding overrides from `branding/site.json`.
+13. Report what changed, what is still missing, and any risks.
 
 ## Required Inputs
 
@@ -88,5 +90,6 @@ The task is complete when:
 - the health checks pass
 - admin access works
 - outbound email works
+- any enabled fleet registration/heartbeat path is disclosed and configured as requested
 - this repo accurately reflects the deployed desired state
 - any installed extension has passed the required review gates

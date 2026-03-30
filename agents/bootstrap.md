@@ -43,16 +43,17 @@ Take a new customer from an empty Linux host to a working Move Big Rocks instanc
    - GraphQL availability
    - admin login flow
    - outbound email delivery
-10. Create the admin user if needed.
-11. Create the primary workspace if needed.
-12. Create or confirm one dedicated preview workspace for extension preview if the instance will run optional packs.
-13. Review `extensions/desired-state.yaml`.
-14. Install any requested extensions.
-15. Run the extension threat model and review checklist before activation.
-16. Activate new or upgraded workspace-scoped extensions in the preview workspace first.
-17. Apply branding overrides from `branding/site.json`.
-18. Enable public routes only after review gates pass.
-19. Report the final state, gaps, and risks.
+10. If `spec.fleet` is enabled, run the manual `Register Fleet` workflow and confirm the operator understands the disclosed registration and heartbeat behavior.
+11. Create the admin user if needed.
+12. Create the primary workspace if needed.
+13. Create or confirm one dedicated preview workspace for extension preview if the instance will run optional extensions.
+14. Review `extensions/desired-state.yaml`.
+15. Install any requested extensions.
+16. Run the extension threat model and review checklist before activation.
+17. Activate new or upgraded workspace-scoped extensions in the preview workspace first.
+18. Apply branding overrides from `branding/site.json`.
+19. Enable public routes only after review gates pass.
+20. Report the final state, gaps, and risks.
 
 ## Guardrails
 
@@ -63,5 +64,6 @@ Take a new customer from an empty Linux host to a working Move Big Rocks instanc
 - Do not write secrets into tracked files.
 - Do not treat the private instance repo as “just documentation”; it is part of the production control plane and needs real review gates.
 - Do not proceed to production deployment if repo protections or deployment-environment reviewers are missing without explicitly calling that out as a risk.
+- Do not hide fleet registration or heartbeat behavior from the operator. Registration is explicit and the heartbeat remains optional.
 - Keep custom app source code in separate repos unless the customization is a simple content override.
 - Default to one private instance repo only. Introduce a second repo only when building a custom extension with real logic.

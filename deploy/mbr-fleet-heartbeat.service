@@ -1,0 +1,12 @@
+[Unit]
+Description=Move Big Rocks fleet heartbeat
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=mbr
+Group=mbr
+Environment=ROOT_DIR=/opt/mbr
+ExecStart=/opt/mbr/deploy/mbr-fleet-heartbeat.sh
+

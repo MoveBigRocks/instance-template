@@ -32,6 +32,7 @@ This source tree is not:
 5. Point the agent at `START_HERE.md`.
 6. Let the agent deploy and operate the instance.
 7. Use `scripts/read-instance-config.sh` to validate and inspect the non-secret desired state.
+8. Run the manual `Register Fleet` workflow if this instance should be registered for support, grandfathering, or future commercial transitions.
 
 See also:
 
@@ -53,7 +54,7 @@ See also:
 - `extensions/desired-state.yaml`
   Installed and planned extension refs.
 - `.github/workflows/`
-  Deployment and verification workflows owned by the instance repo.
+  Deployment, verification, and explicit fleet-registration workflows owned by the instance repo.
 - `deploy/`
   Deploy scripts, service units, and host bootstrap assets owned by the instance repo.
 - `security/`
@@ -68,6 +69,7 @@ See also:
 - Store custom extension source in separate repos.
 - Keep customer-specific secrets in GitHub Actions secrets or another secret manager, not in this repo.
 - Keep hosts, domains, artifact refs, buckets, and provider choices in `mbr.instance.yaml`.
+- Keep fleet registration explicit. The control-plane callback must stay disclosed, coarse, and optional for the running core platform.
 - Default to one private instance repo only. Add a custom extension repo only when you are building custom extension logic.
 
 ## Export Status

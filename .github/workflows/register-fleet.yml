@@ -1,0 +1,137 @@
+name: Register Fleet
+
+on:
+  workflow_dispatch:
+
+jobs:
+  register:
+    name: Register This Instance With MBR Fleet
+    if: github.repository != 'MoveBigRocks/instance-template'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout instance repo
+        uses: actions/checkout@v4
+
+      - name: Load instance configuration
+        id: config
+        run: |
+          chmod +x scripts/read-instance-config.sh
+          scripts/read-instance-config.sh mbr.instance.yaml >> "$GITHUB_OUTPUT"
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" | base64 -d > ~/.ssh/id_ed25519_deploy
+          chmod 600 ~/.ssh/id_ed25519_deploy
+          ssh-keygen -y -f ~/.ssh/id_ed25519_deploy >/dev/null 2>&1 || { echo "Invalid SSH key"; exit 1; }
+
+      - name: Register instance and persist tracking secret on host
+        env:
+          DEPLOY_HOST: ${{ steps.config.outputs.deploy_host }}
+          ROOT_DIR: ${{ steps.config.outputs.root_dir }}
+          FLEET_API_URL: ${{ steps.config.outputs.fleet_api_url }}
+          INSTANCE_ID: ${{ steps.config.outputs.instance_id }}
+          INSTANCE_NAME: ${{ steps.config.outputs.metadata_name }}
+          CORE_VERSION: ${{ steps.config.outputs.core_version }}
+          FLEET_OPERATOR_EMAIL: ${{ steps.config.outputs.fleet_operator_email }}
+          FLEET_USE_CASE: ${{ steps.config.outputs.fleet_use_case }}
+          FLEET_REGISTRATION_SOURCE: ${{ steps.config.outputs.fleet_registration_source }}
+          FLEET_HEARTBEAT_ENABLED: ${{ steps.config.outputs.fleet_heartbeat_enabled }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no "mbr@${DEPLOY_HOST}" "bash -s" <<EOF
+            set -euo pipefail
+
+            ROOT_DIR=$(printf '%q' "${ROOT_DIR}")
+            FLEET_API_URL=$(printf '%q' "${FLEET_API_URL}")
+            INSTANCE_ID=$(printf '%q' "${INSTANCE_ID}")
+            INSTANCE_NAME=$(printf '%q' "${INSTANCE_NAME}")
+            CORE_VERSION=$(printf '%q' "${CORE_VERSION}")
+            FLEET_OPERATOR_EMAIL=$(printf '%q' "${FLEET_OPERATOR_EMAIL}")
+            FLEET_USE_CASE=$(printf '%q' "${FLEET_USE_CASE}")
+            FLEET_REGISTRATION_SOURCE=$(printf '%q' "${FLEET_REGISTRATION_SOURCE}")
+            FLEET_HEARTBEAT_ENABLED=$(printf '%q' "${FLEET_HEARTBEAT_ENABLED}")
+
+            MBR_BIN="${ROOT_DIR}/tools/mbr"
+            if [[ ! -x "\${MBR_BIN}" ]]; then
+              echo "Missing \${MBR_BIN}. Deploy the pinned core release first so the packaged operator tools exist on the host."
+              exit 1
+            fi
+
+            existing_secret=""
+            if [[ -f "\${ROOT_DIR}/.fleet-secret.env" ]]; then
+              set -a
+              source "\${ROOT_DIR}/.fleet-secret.env"
+              set +a
+              existing_secret="\${MBR_FLEET_TRACKING_SECRET:-}"
+            fi
+
+            secret_out=\$(mktemp)
+            cleanup() {
+              rm -f "\${secret_out}"
+            }
+            trap cleanup EXIT
+
+            register_args=(
+              fleet
+              register
+              --fleet-url "\${FLEET_API_URL}"
+              --instance-id "\${INSTANCE_ID}"
+              --instance-name "\${INSTANCE_NAME}"
+              --operator-email "\${FLEET_OPERATOR_EMAIL}"
+              --use-case "\${FLEET_USE_CASE}"
+              --registration-source "\${FLEET_REGISTRATION_SOURCE}"
+              --platform-version "\${CORE_VERSION}"
+              --tracking-secret-out "\${secret_out}"
+            )
+
+            if [[ -n "\${existing_secret}" ]]; then
+              register_args+=(--tracking-secret "\${existing_secret}")
+            fi
+
+            "\${MBR_BIN}" "\${register_args[@]}"
+
+            if [[ -s "\${secret_out}" ]]; then
+              printf 'MBR_FLEET_TRACKING_SECRET=%s\n' "\$(tr -d '\n' < "\${secret_out}")" > "\${ROOT_DIR}/.fleet-secret.env"
+              chmod 600 "\${ROOT_DIR}/.fleet-secret.env"
+            fi
+
+            if [[ "\${FLEET_HEARTBEAT_ENABLED}" == "true" ]]; then
+              sudo systemctl enable --now mbr-fleet-heartbeat.timer
+            else
+              sudo systemctl stop mbr-fleet-heartbeat.timer 2>/dev/null || true
+              sudo systemctl disable mbr-fleet-heartbeat.timer 2>/dev/null || true
+            fi
+          EOF
+
+      - name: Verify registration side effects
+        env:
+          DEPLOY_HOST: ${{ steps.config.outputs.deploy_host }}
+          ROOT_DIR: ${{ steps.config.outputs.root_dir }}
+          FLEET_HEARTBEAT_ENABLED: ${{ steps.config.outputs.fleet_heartbeat_enabled }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no "mbr@${DEPLOY_HOST}" <<EOF
+            set -euo pipefail
+            test -f "${ROOT_DIR}/.fleet-secret.env"
+            if [ "${FLEET_HEARTBEAT_ENABLED}" = "true" ]; then
+              sudo systemctl is-enabled mbr-fleet-heartbeat.timer >/dev/null
+            fi
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519_deploy
+
+      - name: Summary
+        run: |
+          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
+          ## Fleet Registration Complete
+
+          Registered:
+          - instance identity from \`mbr.instance.yaml\`
+          - operator contact for this deployment
+          - host-local tracking secret at \`/opt/mbr/.fleet-secret.env\`
+
+          If heartbeat is enabled in \`mbr.instance.yaml\`, the weekly \`mbr-fleet-heartbeat.timer\` is now enabled on the host.
+          EOF

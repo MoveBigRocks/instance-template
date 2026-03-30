@@ -102,6 +102,12 @@ fi
 if [ -f "${SCRIPT_DIR}/mbr-green.service" ]; then
     cp "${SCRIPT_DIR}/mbr-green.service" /etc/systemd/system/
 fi
+if [ -f "${SCRIPT_DIR}/mbr-fleet-heartbeat.service" ]; then
+    cp "${SCRIPT_DIR}/mbr-fleet-heartbeat.service" /etc/systemd/system/
+fi
+if [ -f "${SCRIPT_DIR}/mbr-fleet-heartbeat.timer" ]; then
+    cp "${SCRIPT_DIR}/mbr-fleet-heartbeat.timer" /etc/systemd/system/
+fi
 if [ -f "${SCRIPT_DIR}/prometheus.service" ]; then
     cp "${SCRIPT_DIR}/prometheus.service" /etc/systemd/system/
 fi

@@ -228,6 +228,42 @@ jobs:
           ssh -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no "mbr@${DEPLOY_HOST}" \
             "chmod 600 ${ROOT_DIR}/.env"
 
+      - name: Create fleet config file
+        env:
+          FLEET_API_URL: ${{ steps.config.outputs.fleet_api_url }}
+          INSTANCE_ID: ${{ steps.config.outputs.instance_id }}
+          INSTANCE_NAME: ${{ steps.config.outputs.metadata_name }}
+          CORE_VERSION: ${{ steps.config.outputs.core_version }}
+          FLEET_OPERATOR_EMAIL: ${{ steps.config.outputs.fleet_operator_email }}
+          FLEET_USE_CASE: ${{ steps.config.outputs.fleet_use_case }}
+          FLEET_REGISTRATION_SOURCE: ${{ steps.config.outputs.fleet_registration_source }}
+          FLEET_HEARTBEAT_ENABLED: ${{ steps.config.outputs.fleet_heartbeat_enabled }}
+        run: |
+          cat > /tmp/mbr.fleet-config.env.tmp <<EOF
+          MBR_FLEET_API_URL=${FLEET_API_URL}
+          MBR_FLEET_INSTANCE_ID=${INSTANCE_ID}
+          MBR_FLEET_INSTANCE_NAME=${INSTANCE_NAME}
+          MBR_FLEET_PLATFORM_VERSION=${CORE_VERSION}
+          MBR_FLEET_OPERATOR_EMAIL=${FLEET_OPERATOR_EMAIL}
+          MBR_FLEET_USE_CASE=${FLEET_USE_CASE}
+          MBR_FLEET_REGISTRATION_SOURCE=${FLEET_REGISTRATION_SOURCE}
+          MBR_FLEET_HEARTBEAT_ENABLED=${FLEET_HEARTBEAT_ENABLED}
+          EOF
+
+          sed 's/^[[:space:]]*//' /tmp/mbr.fleet-config.env.tmp > /tmp/mbr.fleet-config.env
+          rm /tmp/mbr.fleet-config.env.tmp
+
+      - name: Upload fleet config file
+        env:
+          DEPLOY_HOST: ${{ steps.config.outputs.deploy_host }}
+          ROOT_DIR: ${{ steps.config.outputs.root_dir }}
+        run: |
+          scp -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no \
+            /tmp/mbr.fleet-config.env \
+            "mbr@${DEPLOY_HOST}:${ROOT_DIR}/.fleet-config.env"
+          ssh -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no "mbr@${DEPLOY_HOST}" \
+            "chmod 600 ${ROOT_DIR}/.fleet-config.env"
+
       - name: Deploy to inactive slot
         env:
           DEPLOY_HOST: ${{ steps.config.outputs.deploy_host }}
@@ -235,6 +271,7 @@ jobs:
           DEPLOY_SLOT: ${{ steps.slot.outputs.deploy_slot }}
           ACTIVE_SLOT: ${{ steps.slot.outputs.active_slot }}
           DEPLOY_PORT: ${{ steps.slot.outputs.deploy_port }}
+          FLEET_HEARTBEAT_ENABLED: ${{ steps.config.outputs.fleet_heartbeat_enabled }}
         run: |
           ssh -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no "mbr@${DEPLOY_HOST}" <<EOF
             set -e
@@ -264,13 +301,21 @@ jobs:
             rsync -av --delete /tmp/mbr-extract/tools/ tools/ || true
             chmod +x tools/* 2>/dev/null || true
 
-            cp /tmp/mbr-extract/deploy/*.service "${ROOT_DIR}/" 2>/dev/null || true
+            mkdir -p deploy
+            rsync -av --delete /tmp/mbr-extract/deploy/ deploy/ || true
+            chmod +x deploy/*.sh 2>/dev/null || true
 
-            if ! diff -q "${ROOT_DIR}/mbr-blue.service" /etc/systemd/system/mbr-blue.service >/dev/null 2>&1; then
-              sudo /bin/cp "${ROOT_DIR}/mbr-blue.service" /etc/systemd/system/
+            if ! diff -q "${ROOT_DIR}/deploy/mbr-blue.service" /etc/systemd/system/mbr-blue.service >/dev/null 2>&1; then
+              sudo /bin/cp "${ROOT_DIR}/deploy/mbr-blue.service" /etc/systemd/system/
             fi
-            if ! diff -q "${ROOT_DIR}/mbr-green.service" /etc/systemd/system/mbr-green.service >/dev/null 2>&1; then
-              sudo /bin/cp "${ROOT_DIR}/mbr-green.service" /etc/systemd/system/
+            if ! diff -q "${ROOT_DIR}/deploy/mbr-green.service" /etc/systemd/system/mbr-green.service >/dev/null 2>&1; then
+              sudo /bin/cp "${ROOT_DIR}/deploy/mbr-green.service" /etc/systemd/system/
+            fi
+            if [ -f "${ROOT_DIR}/deploy/mbr-fleet-heartbeat.service" ] && ! diff -q "${ROOT_DIR}/deploy/mbr-fleet-heartbeat.service" /etc/systemd/system/mbr-fleet-heartbeat.service >/dev/null 2>&1; then
+              sudo /bin/cp "${ROOT_DIR}/deploy/mbr-fleet-heartbeat.service" /etc/systemd/system/
+            fi
+            if [ -f "${ROOT_DIR}/deploy/mbr-fleet-heartbeat.timer" ] && ! diff -q "${ROOT_DIR}/deploy/mbr-fleet-heartbeat.timer" /etc/systemd/system/mbr-fleet-heartbeat.timer >/dev/null 2>&1; then
+              sudo /bin/cp "${ROOT_DIR}/deploy/mbr-fleet-heartbeat.timer" /etc/systemd/system/
             fi
 
             sudo systemctl daemon-reload
@@ -301,6 +346,15 @@ jobs:
             # Update Prometheus file-based service discovery target (if configured)
             if command -v update-prometheus-target >/dev/null 2>&1; then
               sudo update-prometheus-target mbr "${DEPLOY_SLOT}"
+            fi
+
+            if [ "${FLEET_HEARTBEAT_ENABLED}" = "true" ]; then
+              if sudo systemctl is-enabled mbr-fleet-heartbeat.timer >/dev/null 2>&1; then
+                sudo systemctl restart mbr-fleet-heartbeat.timer
+              fi
+            else
+              sudo systemctl stop mbr-fleet-heartbeat.timer 2>/dev/null || true
+              sudo systemctl disable mbr-fleet-heartbeat.timer 2>/dev/null || true
             fi
 
             rm -rf /tmp/mbr-extract /tmp/mbr-deploy.tar.gz

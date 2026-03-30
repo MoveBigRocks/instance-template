@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly Move Big Rocks fleet heartbeat
+
+[Timer]
+OnBootSec=1h
+OnUnitActiveSec=7d
+RandomizedDelaySec=6h
+Persistent=true
+Unit=mbr-fleet-heartbeat.service
+
+[Install]
+WantedBy=timers.target

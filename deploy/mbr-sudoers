@@ -19,6 +19,13 @@ mbr ALL=(ALL) NOPASSWD: /bin/systemctl status mbr-green
 mbr ALL=(ALL) NOPASSWD: /bin/systemctl enable mbr-green
 mbr ALL=(ALL) NOPASSWD: /bin/systemctl disable mbr-green
 
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl start mbr-fleet-heartbeat.timer
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl stop mbr-fleet-heartbeat.timer
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl restart mbr-fleet-heartbeat.timer
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl status mbr-fleet-heartbeat.timer
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl enable mbr-fleet-heartbeat.timer
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl disable mbr-fleet-heartbeat.timer
+
 # Legacy single-service cleanup
 mbr ALL=(ALL) NOPASSWD: /bin/systemctl stop mbr
 mbr ALL=(ALL) NOPASSWD: /bin/systemctl disable mbr
@@ -34,6 +41,8 @@ mbr ALL=(ALL) NOPASSWD: /bin/cp /tmp/mbr-extract/mbr-server /opt/mbr/mbr-blue
 mbr ALL=(ALL) NOPASSWD: /bin/cp /tmp/mbr-extract/mbr-server /opt/mbr/mbr-green
 mbr ALL=(ALL) NOPASSWD: /bin/cp /opt/mbr/mbr-blue.service /etc/systemd/system/
 mbr ALL=(ALL) NOPASSWD: /bin/cp /opt/mbr/mbr-green.service /etc/systemd/system/
+mbr ALL=(ALL) NOPASSWD: /bin/cp /opt/mbr/deploy/mbr-fleet-heartbeat.service /etc/systemd/system/
+mbr ALL=(ALL) NOPASSWD: /bin/cp /opt/mbr/deploy/mbr-fleet-heartbeat.timer /etc/systemd/system/
 mbr ALL=(ALL) NOPASSWD: /bin/chown mbr\:mbr /opt/mbr/mbr-blue
 mbr ALL=(ALL) NOPASSWD: /bin/chown mbr\:mbr /opt/mbr/mbr-green
 mbr ALL=(ALL) NOPASSWD: /bin/chown mbr\:mbr /opt/mbr/.active-slot

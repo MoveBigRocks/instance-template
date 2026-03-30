@@ -45,6 +45,19 @@ spec:
   monitoring:
     internalHealth: true
     internalMetrics: true
+  fleet:
+    # Explicit control-plane registration for support, grandfathering, and
+    # future commercial entitlements. The core platform still runs if this
+    # endpoint is unreachable.
+    endpoint: https://movebigrocks.com
+    registration:
+      operatorEmail: owner@example.com
+      useCase: internal_ops
+      source: self_hosted
+    heartbeat:
+      # Coarse weekly callback only. No case content, conversation content,
+      # end-user identities, or customer records are sent.
+      enabled: true
   agent:
     bootstrap:
       createAdmin: true
