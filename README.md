@@ -32,7 +32,8 @@ This source tree is not:
 5. Point the agent at `START_HERE.md`.
 6. Let the agent deploy and operate the instance.
 7. Use `scripts/read-instance-config.sh` to validate and inspect the non-secret desired state.
-8. Review the `spec.fleet` settings and run the manual `Register Fleet` workflow if this instance should be registered for support, grandfathering, or future commercial transitions.
+8. Use `scripts/validate-extension-desired-state.sh` before changing or deploying `extensions/desired-state.yaml`.
+9. Review the `spec.fleet` settings and run the manual `Register Fleet` workflow if this instance should be registered for support, grandfathering, or future commercial transitions.
 
 See also:
 
@@ -61,11 +62,14 @@ See also:
   Threat-model and review materials for custom extensions.
 - `scripts/read-instance-config.sh`
   Canonical parser and validator for `mbr.instance.yaml`.
+- `scripts/validate-extension-desired-state.sh`
+  Verifies that installed extension refs are real before deploy.
 
 ## Operating Rules
 
 - Pin core releases instead of tracking arbitrary commits.
 - Pin extension artifact refs instead of storing proprietary extension source here.
+- Validate extension desired-state refs before merge or deploy.
 - Store custom extension source in separate repos.
 - Keep customer-specific secrets in GitHub Actions secrets or another secret manager, not in this repo.
 - Keep hosts, domains, artifact refs, buckets, and provider choices in `mbr.instance.yaml`.

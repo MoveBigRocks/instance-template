@@ -26,6 +26,22 @@ jobs:
           chmod +x scripts/read-instance-config.sh
           scripts/read-instance-config.sh mbr.instance.yaml >> "$GITHUB_OUTPUT"
 
+      - name: Install ORAS
+        run: |
+          VERSION="1.2.3"
+          curl -LO "https://github.com/oras-project/oras/releases/download/v${VERSION}/oras_${VERSION}_linux_amd64.tar.gz"
+          tar -xzf "oras_${VERSION}_linux_amd64.tar.gz"
+          sudo mv oras /usr/local/bin/
+          oras version
+
+      - name: Validate extension desired state
+        env:
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          chmod +x scripts/validate-extension-desired-state.sh
+          scripts/validate-extension-desired-state.sh extensions/desired-state.yaml
+
       - name: Validate core secrets
         env:
           DATABASE_DSN: ${{ secrets.DATABASE_DSN }}

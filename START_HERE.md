@@ -19,15 +19,16 @@ The target outcome is:
 
 1. `mbr.instance.yaml`
 2. `scripts/read-instance-config.sh`
-3. `agents/bootstrap.md`
-4. `extensions/desired-state.yaml`
-5. `deploy/README.md`
-6. `.github/workflows/production.yml`
-6b. `deploy/UPGRADE.md` — step-by-step core version upgrade process
-7. `branding/site.json`
-8. `security/extension-threat-model.md`
-9. `security/review-checklist.md`
-10. `https://github.com/movebigrocks/platform/blob/main/docs/INSTANCE_AND_EXTENSION_LIFECYCLE.md` when custom extension work is involved
+3. `scripts/validate-extension-desired-state.sh`
+4. `agents/bootstrap.md`
+5. `extensions/desired-state.yaml`
+6. `deploy/README.md`
+7. `.github/workflows/production.yml`
+7b. `deploy/UPGRADE.md` — step-by-step core version upgrade process
+8. `branding/site.json`
+9. `security/extension-threat-model.md`
+10. `security/review-checklist.md`
+11. `https://github.com/movebigrocks/platform/blob/main/docs/INSTANCE_AND_EXTENSION_LIFECYCLE.md` when custom extension work is involved
 
 ## Default Rules
 
@@ -44,22 +45,23 @@ The target outcome is:
 
 1. Read `mbr.instance.yaml` and understand the desired state.
 2. Run `scripts/read-instance-config.sh mbr.instance.yaml` and confirm the parsed host, domains, pinned artifact refs, email provider, and storage provider.
-3. Check that the required repository or environment secrets exist.
-4. Bootstrap the Linux host if needed.
-5. Deploy the pinned Move Big Rocks core release.
-6. Verify:
+3. Run `scripts/validate-extension-desired-state.sh extensions/desired-state.yaml` before any deploy that changes extension refs.
+4. Check that the required repository or environment secrets exist.
+5. Bootstrap the Linux host if needed.
+6. Deploy the pinned Move Big Rocks core release.
+7. Verify:
    - app health
    - admin health
    - API health
    - admin login
    - outbound email
-7. If `spec.fleet` is enabled, run the manual `Register Fleet` workflow after the first successful deploy and verify the disclosure language with the operator.
-8. Create the first admin user if needed.
-9. Create the primary workspace if needed.
-10. Review `extensions/desired-state.yaml`.
-11. Install, validate, configure, and activate any requested extensions, using the public signed first-party bundle refs when applicable.
-12. Apply branding overrides from `branding/site.json`.
-13. Report what changed, what is still missing, and any risks.
+8. If `spec.fleet` is enabled, run the manual `Register Fleet` workflow after the first successful deploy and verify the disclosure language with the operator.
+9. Create the first admin user if needed.
+10. Create the primary workspace if needed.
+11. Review `extensions/desired-state.yaml`.
+12. Install, validate, configure, and activate any requested extensions, using the public signed first-party bundle refs when applicable.
+13. Apply branding overrides from `branding/site.json`.
+14. Report what changed, what is still missing, and any risks.
 
 ## Required Inputs
 

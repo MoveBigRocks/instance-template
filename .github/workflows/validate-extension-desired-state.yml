@@ -1,0 +1,38 @@
+name: Validate Extension Desired State
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout instance repo
+        uses: actions/checkout@v4
+
+      - name: Install ORAS
+        run: |
+          VERSION="1.2.3"
+          curl -LO "https://github.com/oras-project/oras/releases/download/v${VERSION}/oras_${VERSION}_linux_amd64.tar.gz"
+          tar -xzf "oras_${VERSION}_linux_amd64.tar.gz"
+          sudo mv oras /usr/local/bin/
+          oras version
+
+      - name: Validate instance configuration
+        run: |
+          chmod +x scripts/read-instance-config.sh
+          scripts/read-instance-config.sh mbr.instance.yaml >/dev/null
+
+      - name: Validate extension desired state
+        env:
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          chmod +x scripts/validate-extension-desired-state.sh
+          scripts/validate-extension-desired-state.sh extensions/desired-state.yaml

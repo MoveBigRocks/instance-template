@@ -28,32 +28,33 @@ Take a new customer from an empty Linux host to a working Move Big Rocks instanc
 
 1. Read `mbr.instance.yaml`.
 2. Run `scripts/read-instance-config.sh mbr.instance.yaml` and confirm the parsed values.
-3. Read `START_HERE.md`.
-4. Confirm the pinned core artifact refs and target host.
-5. Review the private instance repo control-plane protections before deployment:
+3. Run `scripts/validate-extension-desired-state.sh extensions/desired-state.yaml` before any deploy that changes extension refs.
+4. Read `START_HERE.md`.
+5. Confirm the pinned core artifact refs and target host.
+6. Review the private instance repo control-plane protections before deployment:
    - branch protection or equivalent merge gate on the default branch
    - required reviewers for production deployment environments
    - least-privilege secrets scoped to the environments that actually need them
    - audit visibility for secret changes and production rollouts
-6. Bootstrap the host with the deploy assets.
-7. Configure runtime secrets outside git.
-8. Deploy the pinned core release.
-9. Verify:
+7. Bootstrap the host with the deploy assets.
+8. Configure runtime secrets outside git.
+9. Deploy the pinned core release.
+10. Verify:
    - app health endpoint
    - GraphQL availability
    - admin login flow
    - outbound email delivery
-10. Review `spec.fleet`. If the operator wants this instance registered for support, grandfathering, or future commercial transitions, run the manual `Register Fleet` workflow and confirm they understand the disclosed registration and heartbeat behavior.
-11. Create the admin user if needed.
-12. Create the primary workspace if needed.
-13. Create or confirm one dedicated preview workspace for extension preview if the instance will run optional extensions.
-14. Review `extensions/desired-state.yaml`.
-15. Install any requested extensions.
-16. Run the extension threat model and review checklist before activation.
-17. Activate new or upgraded workspace-scoped extensions in the preview workspace first.
-18. Apply branding overrides from `branding/site.json`.
-19. Enable public routes only after review gates pass.
-20. Report the final state, gaps, and risks.
+11. Review `spec.fleet`. If the operator wants this instance registered for support, grandfathering, or future commercial transitions, run the manual `Register Fleet` workflow and confirm they understand the disclosed registration and heartbeat behavior.
+12. Create the admin user if needed.
+13. Create the primary workspace if needed.
+14. Create or confirm one dedicated preview workspace for extension preview if the instance will run optional extensions.
+15. Review `extensions/desired-state.yaml`.
+16. Install any requested extensions.
+17. Run the extension threat model and review checklist before activation.
+18. Activate new or upgraded workspace-scoped extensions in the preview workspace first.
+19. Apply branding overrides from `branding/site.json`.
+20. Enable public routes only after review gates pass.
+21. Report the final state, gaps, and risks.
 
 ## Guardrails
 
