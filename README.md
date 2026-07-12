@@ -64,6 +64,9 @@ See also:
   Canonical parser and validator for `mbr.instance.yaml`.
 - `scripts/validate-extension-desired-state.sh`
   Verifies that installed extension refs are real before deploy.
+- `scripts/sync-from-template.sh`
+  Pulls deploy and security scaffolding updates from this template into an
+  existing instance repo, without touching instance identity or secrets.
 
 ## Operating Rules
 
@@ -75,6 +78,33 @@ See also:
 - Keep hosts, domains, artifact refs, buckets, and provider choices in `mbr.instance.yaml`.
 - Keep fleet registration explicit. Every instance repo carries `spec.fleet`, but registration remains a manual control-plane action and the heartbeat stays disclosed, coarse, and optional for the running core platform.
 - Default to one private instance repo only. Add a custom extension repo only when you are building custom extension logic.
+
+## Syncing Template Updates Into an Existing Instance
+
+New instance repos start from this template, but existing ones do not update
+automatically. When the template's deploy or security scaffolding changes (for
+example a new RFC in the deploy workflow or a sudoers tightening), pull those
+changes into an existing instance repo with:
+
+```bash
+# Preview the diff without changing anything
+scripts/sync-from-template.sh --dry-run
+
+# Review the diff, then confirm to apply the mechanism changes
+scripts/sync-from-template.sh
+```
+
+The script fetches the latest template, shows a diff of the non-instance-specific
+scaffolding (workflows, deploy scripts, reconcile machinery, config reader,
+security materials), and applies it only after you type `yes`. It never
+overwrites instance identity or secrets: `mbr.instance.yaml`,
+`extensions/desired-state.yaml`, `branding/site.json`, and any `*.env` /
+`*secret*` / `.fleet-*` file are left untouched. Service unit files and the
+Caddy/env examples often carry per-instance ports or domains, so they are shown
+for manual review but never applied automatically.
+
+After syncing, re-run `scripts/read-instance-config.sh` and
+`scripts/validate-extension-desired-state.sh`, then review and commit.
 
 ## Export Status
 
