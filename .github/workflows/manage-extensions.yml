@@ -1,0 +1,79 @@
+name: Manage Extensions
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - status
+
+jobs:
+  manage:
+    name: Extension Management
+    if: github.repository != 'MoveBigRocks/instance-template'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout instance repo
+        uses: actions/checkout@v6
+
+      - name: Load instance configuration
+        id: config
+        run: |
+          chmod +x scripts/read-instance-config.sh
+          scripts/read-instance-config.sh mbr.instance.yaml >> "$GITHUB_OUTPUT"
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" | base64 -d > ~/.ssh/id_ed25519_deploy
+          chmod 600 ~/.ssh/id_ed25519_deploy
+          ssh-keygen -y -f ~/.ssh/id_ed25519_deploy >/dev/null 2>&1 || { echo "Invalid SSH key"; exit 1; }
+
+      - name: Check extension status
+        if: inputs.action == 'status'
+        env:
+          DEPLOY_HOST: ${{ steps.config.outputs.deploy_host }}
+          ROOT_DIR: ${{ steps.config.outputs.root_dir }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no "mbr@${DEPLOY_HOST}" <<EOF
+            set -a
+            source "${ROOT_DIR}/.env"
+            set +a
+
+            ACTIVE_SLOT=\$(cat "${ROOT_DIR}/.active-slot" 2>/dev/null || echo "blue")
+
+            echo "=== Installed Extensions ==="
+            psql "\$DATABASE_DSN" -c "SELECT slug, status, health_status, version, activated_at FROM core_platform.installed_extensions WHERE deleted_at IS NULL ORDER BY slug;" 2>/dev/null
+
+            echo "=== Extension Schemas ==="
+            psql "\$DATABASE_DSN" -c "SELECT package_key, schema_name, status, current_schema_version FROM core_extension_runtime.extension_package_registrations ORDER BY package_key;" 2>/dev/null
+
+            echo "=== Extension Tables ==="
+            psql "\$DATABASE_DSN" -c "SELECT schemaname, count(*) as tables FROM pg_tables WHERE schemaname LIKE 'ext_%' GROUP BY schemaname ORDER BY schemaname;" 2>/dev/null
+
+            echo "=== Supervised Extension Runtime Processes ==="
+            # As of RFC-0016 extension runtimes are in-process children of the
+            # active mbr-<slot> core, not standalone systemd units. List the
+            # live runtime binaries under the shared runtime directory.
+            pgrep -fa '/extensions-runtime/bin/' || echo "(none running)"
+
+            echo "=== Extension Runtime Sockets (active slot) ==="
+            ls -la "${ROOT_DIR}/tmp/extensions/\${ACTIVE_SLOT}" 2>/dev/null || true
+          EOF
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519_deploy
+
+      - name: Summary
+        run: |
+          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
+          ## Extension Management: ${{ inputs.action }}
+
+          Action completed for this instance.
+          EOF

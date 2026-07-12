@@ -13,6 +13,14 @@ WorkingDirectory=/opt/mbr
 ExecStart=/opt/mbr/mbr-green
 Environment=PORT=8081
 Environment=HOST=127.0.0.1
+# MBR_SLOT tells the core it is running as the green slot. The core uses this to
+# slot-scope the extension runtime socket directory
+# (/opt/mbr/tmp/extensions/green) and to supervise extension runtime processes
+# as children of this slot. See RFC-0016.
+Environment=MBR_SLOT=green
+Environment=EXTENSION_RUNTIME_DIR=/opt/mbr/tmp/extensions
+Environment=EXTENSION_RUNTIME_BINARY_DIR=/opt/mbr/extensions-runtime/bin
+Environment=EXTENSION_RUNTIME_MANIFEST_PATH=/opt/mbr/extensions/runtime-manifest.json
 
 # Environment file for secrets and configuration
 # NOTE: PORT and HOST must NOT be set in .env - each slot controls its own port

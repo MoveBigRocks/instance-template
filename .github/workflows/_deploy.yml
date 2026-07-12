@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout instance repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Load instance configuration
         id: config
@@ -47,6 +47,65 @@ jobs:
             echo "No registry credentials provided; assuming public artifact access"
           fi
 
+      - name: Verify pinned platform version integrity
+        # Guards against two races that both cost a deploy cycle if they
+        # trigger:
+        #   1. Pinning a semver that the Release Pipeline annotated before the
+        #      OCI semver tag step finished (older-sibling commit still
+        #      latest-tag for a few seconds).
+        #   2. Operator error: pinning a version whose git tag points at a
+        #      different commit than the one assumed.
+        # Both resolve to the same check: the git tag for the pinned version
+        # and the OCI image tagged with that version must refer to the same
+        # commit. If they disagree, or if either is missing, abort.
+        env:
+          CORE_VERSION: ${{ steps.config.outputs.core_version }}
+          SERVICES_ARTIFACT: ${{ steps.config.outputs.services_artifact }}
+          MANIFEST_ARTIFACT: ${{ steps.config.outputs.manifest_artifact }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          echo "Verifying platform tag integrity for ${CORE_VERSION}"
+
+          # Resolve the commit SHA the git tag points at. The tag can be
+          # annotated (-> tag object -> commit) or lightweight (-> commit
+          # directly); follow both.
+          GIT_TAG_COMMIT="$(gh api "repos/MoveBigRocks/platform/git/refs/tags/${CORE_VERSION}" \
+            --jq '.object.sha' 2>/dev/null || echo '')"
+          if [ -z "${GIT_TAG_COMMIT}" ]; then
+            echo "::error::git tag ${CORE_VERSION} not found in MoveBigRocks/platform"
+            exit 1
+          fi
+          TAG_OBJECT_TYPE="$(gh api "repos/MoveBigRocks/platform/git/refs/tags/${CORE_VERSION}" \
+            --jq '.object.type')"
+          if [ "${TAG_OBJECT_TYPE}" = "tag" ]; then
+            GIT_TAG_COMMIT="$(gh api "repos/MoveBigRocks/platform/git/tags/${GIT_TAG_COMMIT}" \
+              --jq '.object.sha')"
+          fi
+          echo "git tag ${CORE_VERSION} -> ${GIT_TAG_COMMIT}"
+
+          # Resolve the commit embedded in the OCI manifest the deploy would
+          # actually pull. The release pipeline writes the git SHA into the
+          # manifest.json that ships alongside the services/migrations
+          # artifacts; extract it and compare.
+          mkdir -p /tmp/pin-check
+          oras pull "${MANIFEST_ARTIFACT}" -o /tmp/pin-check
+          OCI_COMMIT="$(jq -r '.git_commit // .commit // empty' /tmp/pin-check/manifest.json)"
+          if [ -z "${OCI_COMMIT}" ]; then
+            echo "::error::OCI manifest for ${CORE_VERSION} has no git_commit field"
+            exit 1
+          fi
+          echo "oci manifest ${MANIFEST_ARTIFACT} -> ${OCI_COMMIT}"
+
+          # Normalise to matching prefix lengths to allow short-sha manifests.
+          GIT_SHORT="${GIT_TAG_COMMIT:0:${#OCI_COMMIT}}"
+          if [ "${GIT_SHORT}" != "${OCI_COMMIT}" ] && [ "${GIT_TAG_COMMIT}" != "${OCI_COMMIT}" ]; then
+            echo "::error::pin integrity failure: git tag ${CORE_VERSION} (${GIT_TAG_COMMIT}) and OCI manifest (${OCI_COMMIT}) disagree on commit. Likely cause: the pin was written before the Release Pipeline finished tagging the OCI artifacts, or the pin points at a stale version."
+            exit 1
+          fi
+          echo "Pin integrity OK: ${CORE_VERSION} -> ${GIT_TAG_COMMIT}"
+          rm -rf /tmp/pin-check
+
       - name: Pull release artifacts
         env:
           SERVICES_ARTIFACT: ${{ steps.config.outputs.services_artifact }}
@@ -70,6 +129,52 @@ jobs:
           oras pull "${MANIFEST_ARTIFACT}"
           echo "Release manifest:"
           cat manifest.json | jq .
+
+      - name: Generate extension runtime manifest from desired state
+        run: |
+          mkdir -p artifacts/extensions
+          chmod +x artifacts/tools/reconcile-extensions
+          cp extensions/desired-state.yaml artifacts/extensions/desired-state.yaml
+          artifacts/tools/reconcile-extensions render-runtime-manifest \
+            --desired-state extensions/desired-state.yaml \
+            --output artifacts/extensions/runtime-manifest.json
+
+      - name: Pull configured extension runtime artifacts
+        run: |
+          mkdir -p artifacts/extension-runtimes/bin
+
+          jq -c '.runtimes[]' artifacts/extensions/runtime-manifest.json | while read -r runtime; do
+            slug=$(printf '%s' "${runtime}" | jq -r '.slug')
+            artifact=$(printf '%s' "${runtime}" | jq -r '.artifact')
+            binary=$(printf '%s' "${runtime}" | jq -r '.binary')
+            pull_dir="artifacts/extension-runtimes/pull-${slug}"
+
+            rm -rf "${pull_dir}"
+            mkdir -p "${pull_dir}"
+
+            (
+              cd "${pull_dir}"
+              oras pull "${artifact}"
+              runtime_tarball=$(find . -type f -name '*.tar.gz' | head -1)
+              test -n "${runtime_tarball}" || {
+                echo "Missing runtime tarball for ${slug}" >&2
+                exit 1
+              }
+              tar -xzf "${runtime_tarball}"
+            )
+
+            runtime_binary=$(find "${pull_dir}" -type f -name "${binary}" | head -1)
+            test -n "${runtime_binary}" || {
+              echo "Missing runtime binary ${binary} for ${slug}" >&2
+              exit 1
+            }
+
+            cp "${runtime_binary}" "artifacts/extension-runtimes/bin/${binary}"
+          done
+          # Per-extension env files are no longer generated: as of RFC-0016
+          # the core mbr service supervises extension runtimes as child
+          # processes and sets MBR_EXTENSION_RUNTIME_SOCKET_PATH per child
+          # from its own slot-scoped config.
 
       - name: Setup SSH
         run: |
@@ -109,7 +214,7 @@ jobs:
       - name: Create deployment package
         run: |
           cd artifacts
-          tar -czf /tmp/mbr-deploy.tar.gz mbr-server tools/ migrations/ deploy/ manifest.json
+          tar -czf /tmp/mbr-deploy.tar.gz mbr-server tools/ migrations/ deploy/ manifest.json extension-runtimes/ extensions/
 
       - name: Upload deployment package
         env:
@@ -122,6 +227,7 @@ jobs:
       - name: Create environment file
         env:
           ROOT_DIR: ${{ steps.config.outputs.root_dir }}
+          INSTANCE_ID: ${{ steps.config.outputs.instance_id }}
           APP_DOMAIN: ${{ steps.config.outputs.app_domain }}
           COOKIE_DOMAIN: ${{ steps.config.outputs.cookie_domain }}
           EMAIL_PROVIDER: ${{ steps.config.outputs.email_provider }}
@@ -158,14 +264,17 @@ jobs:
           COOKIE_DOMAIN=${COOKIE_DOMAIN}
           EMAIL_BACKEND=${EMAIL_PROVIDER}
           FROM_EMAIL=${FROM_EMAIL}
-          FROM_NAME=${FROM_NAME}
+          FROM_NAME="${FROM_NAME}"
           STORAGE_PATH=${ROOT_DIR}/data
+          EXTENSION_RUNTIME_DIR=${ROOT_DIR}/tmp/extensions
           CACHE_ENABLED=true
           CACHE_TTL=1h
           RATE_LIMIT_ENABLED=true
           RATE_LIMIT_PER_MIN=60
           METRICS_TOKEN=${METRICS_TOKEN}
           TRUSTED_PROXIES=127.0.0.1,::1
+          INSTANCE_ID=${INSTANCE_ID}
+          EXTENSION_TRUST_REQUIRE_VERIFICATION=false
           EOF
 
           case "${STORAGE_PROVIDER}" in
@@ -284,18 +393,18 @@ jobs:
             tar -xzf /tmp/mbr-deploy.tar.gz -C /tmp/mbr-extract
 
             if [ -f /etc/systemd/system/mbr.service ]; then
-              sudo systemctl stop mbr 2>/dev/null || true
-              sudo systemctl disable mbr 2>/dev/null || true
-              sudo rm -f /etc/systemd/system/mbr.service
-              sudo systemctl daemon-reload
+              sudo /bin/systemctl stop mbr 2>/dev/null || true
+              sudo /bin/systemctl disable mbr 2>/dev/null || true
+              sudo /bin/rm -f /etc/systemd/system/mbr.service
+              sudo /bin/systemctl daemon-reload
             fi
 
-            sudo systemctl stop "mbr-${DEPLOY_SLOT}" 2>/dev/null || true
+            sudo /bin/systemctl stop "mbr-${DEPLOY_SLOT}" 2>/dev/null || true
             sleep 1
 
             sudo /bin/cp /tmp/mbr-extract/mbr-server "${ROOT_DIR}/mbr-${DEPLOY_SLOT}"
-            sudo chown mbr:mbr "${ROOT_DIR}/mbr-${DEPLOY_SLOT}"
-            sudo chmod +x "${ROOT_DIR}/mbr-${DEPLOY_SLOT}"
+            sudo /bin/chown mbr:mbr "${ROOT_DIR}/mbr-${DEPLOY_SLOT}"
+            sudo /bin/chmod +x "${ROOT_DIR}/mbr-${DEPLOY_SLOT}"
 
             mkdir -p tools
             rsync -av --delete /tmp/mbr-extract/tools/ tools/ || true
@@ -305,11 +414,29 @@ jobs:
             rsync -av --delete /tmp/mbr-extract/deploy/ deploy/ || true
             chmod +x deploy/*.sh 2>/dev/null || true
 
-            if ! diff -q "${ROOT_DIR}/deploy/mbr-blue.service" /etc/systemd/system/mbr-blue.service >/dev/null 2>&1; then
-              sudo /bin/cp "${ROOT_DIR}/deploy/mbr-blue.service" /etc/systemd/system/
+            mkdir -p extensions
+            rsync -av --delete /tmp/mbr-extract/extensions/ extensions/
+            chmod 600 extensions/* 2>/dev/null || true
+
+            mkdir -p extensions-runtime/bin tmp/extensions
+            rsync -av --delete /tmp/mbr-extract/extension-runtimes/bin/ extensions-runtime/bin/
+            chmod +x extensions-runtime/bin/* 2>/dev/null || true
+            # Per-extension env files are no longer managed here: as of
+            # RFC-0016 the core mbr service supervises extension runtimes
+            # as child processes and sets MBR_EXTENSION_RUNTIME_SOCKET_PATH
+            # per child from its own slot-scoped config.
+
+            # Clean out any stale env-file directory from the pre-RFC-0016
+            # layout. Idempotent; directory is a no-op if absent.
+            rm -rf extensions-runtime/env 2>/dev/null || true
+
+            cp /tmp/mbr-extract/deploy/*.service "${ROOT_DIR}/" 2>/dev/null || true
+
+            if ! diff -q "${ROOT_DIR}/mbr-blue.service" /etc/systemd/system/mbr-blue.service >/dev/null 2>&1; then
+              sudo /bin/cp "${ROOT_DIR}/mbr-blue.service" /etc/systemd/system/
             fi
-            if ! diff -q "${ROOT_DIR}/deploy/mbr-green.service" /etc/systemd/system/mbr-green.service >/dev/null 2>&1; then
-              sudo /bin/cp "${ROOT_DIR}/deploy/mbr-green.service" /etc/systemd/system/
+            if ! diff -q "${ROOT_DIR}/mbr-green.service" /etc/systemd/system/mbr-green.service >/dev/null 2>&1; then
+              sudo /bin/cp "${ROOT_DIR}/mbr-green.service" /etc/systemd/system/
             fi
             if [ -f "${ROOT_DIR}/deploy/mbr-fleet-heartbeat.service" ] && ! diff -q "${ROOT_DIR}/deploy/mbr-fleet-heartbeat.service" /etc/systemd/system/mbr-fleet-heartbeat.service >/dev/null 2>&1; then
               sudo /bin/cp "${ROOT_DIR}/deploy/mbr-fleet-heartbeat.service" /etc/systemd/system/
@@ -318,8 +445,89 @@ jobs:
               sudo /bin/cp "${ROOT_DIR}/deploy/mbr-fleet-heartbeat.timer" /etc/systemd/system/
             fi
 
-            sudo systemctl daemon-reload
-            sudo systemctl start "mbr-${DEPLOY_SLOT}"
+            # Re-sync /etc/sudoers.d/mbr on every deploy so repo changes to
+            # the sudoers allowlist do not drift from the host. Validate
+            # with visudo -cf before install; a failed validation aborts
+            # the deploy rather than leaving sudoers untouched.
+            if sudo /usr/sbin/visudo -cf /tmp/mbr-extract/deploy/mbr-sudoers; then
+              sudo /bin/cp /tmp/mbr-extract/deploy/mbr-sudoers /etc/sudoers.d/mbr
+              sudo /bin/chmod 440 /etc/sudoers.d/mbr
+            else
+              echo "sudoers validation failed; aborting deploy" >&2
+              exit 1
+            fi
+
+            # RFC-0016 one-shot legacy cleanup: stop, disable, and remove
+            # any mbr-extension-runtime@*.service instance files; then
+            # reap any process that outlived its unit. Extension runtimes
+            # are now supervised in-process by the core, and the cleanup
+            # is idempotent: once no units and no stray binaries remain,
+            # every branch here is a no-op.
+            for unit in /etc/systemd/system/mbr-extension-runtime@*.service; do
+              [ -e "\${unit}" ] || continue
+              instance="\$(basename "\${unit}" .service)"
+              # Skip the template itself; the instance pattern requires an @<name>.
+              case "\${instance}" in
+                mbr-extension-runtime@) continue ;;
+              esac
+
+              # Derive the binary name from the instance so we can reap any
+              # process that outlives the unit. The unit file's ExecStart is
+              # /opt/mbr/extensions-runtime/bin/%i, so the instance name IS
+              # the binary name.
+              binary_name="\${instance#mbr-extension-runtime@}"
+
+              sudo /bin/systemctl stop "\${instance}" 2>/dev/null || true
+              sudo /bin/systemctl disable "\${instance}" 2>/dev/null || true
+              sudo /bin/rm -f "\${unit}"
+
+              # systemctl stop is best-effort; on pre-RFC-0016 hosts the
+              # actual process sometimes reparents to PID 1 instead of
+              # exiting. Reap by binary name with an escalating signal,
+              # bounded to ~6s per binary before we move on. Any remaining
+              # instance is surfaced by the acceptance checks later in the
+              # deploy.
+              for signal in TERM TERM KILL; do
+                pids="\$(pgrep -f "/extensions-runtime/bin/\${binary_name}\$" || true)"
+                [ -z "\${pids}" ] && break
+                for pid in \${pids}; do
+                  /bin/kill -"\${signal}" "\${pid}" 2>/dev/null || true
+                done
+                sleep 2
+              done
+            done
+            if [ -e /etc/systemd/system/mbr-extension-runtime@.service ]; then
+              sudo /bin/rm -f /etc/systemd/system/mbr-extension-runtime@.service
+            fi
+
+            # Final sweep for any runtime process that doesn't match a unit
+            # file (already-orphaned before this deploy, or installed
+            # out-of-band). All extension runtime binaries live under one
+            # directory on the host, so anything there is fair game.
+            for pid in \$(pgrep -f '/extensions-runtime/bin/' 2>/dev/null || true); do
+              ppid=\$(awk '/^PPid:/{print \$2}' "/proc/\${pid}/status" 2>/dev/null || echo "")
+              # Skip children of either slot's core; those are the new
+              # supervised processes. Only reap true orphans (ppid 1) and
+              # any other surprise parent.
+              blue_pid=\$(systemctl show mbr-blue -p MainPID --value 2>/dev/null || echo "")
+              green_pid=\$(systemctl show mbr-green -p MainPID --value 2>/dev/null || echo "")
+              case "\${ppid}" in
+                "\${blue_pid}"|"\${green_pid}")
+                  continue
+                  ;;
+              esac
+              echo "Reaping orphan runtime pid=\${pid} ppid=\${ppid}"
+              /bin/kill -TERM "\${pid}" 2>/dev/null || true
+              sleep 2
+              [ -e "/proc/\${pid}" ] && /bin/kill -KILL "\${pid}" 2>/dev/null || true
+            done
+
+            sudo /bin/systemctl daemon-reload
+
+            # Start the inactive slot. Its core process will read
+            # runtime-manifest.json and spawn the extension runtimes as
+            # supervised children; no separate restart loop is needed.
+            sudo /bin/systemctl start "mbr-${DEPLOY_SLOT}"
 
             HEALTHY=false
             for i in \$(seq 1 30); do
@@ -331,30 +539,39 @@ jobs:
             done
 
             if [ "\${HEALTHY}" = "false" ]; then
-              sudo systemctl stop "mbr-${DEPLOY_SLOT}" || true
-              sudo journalctl -u "mbr-${DEPLOY_SLOT}" --no-pager -n 30
+              sudo /bin/systemctl stop "mbr-${DEPLOY_SLOT}" || true
+              sudo /bin/journalctl -u "mbr-${DEPLOY_SLOT}" --no-pager -n 30
               exit 1
             fi
 
-            sudo systemctl stop "mbr-${ACTIVE_SLOT}" 2>/dev/null || true
-            sudo systemctl disable "mbr-${ACTIVE_SLOT}" 2>/dev/null || true
-            sudo systemctl enable "mbr-${DEPLOY_SLOT}" 2>/dev/null || true
+            MBR_RECONCILE_ROOT_DIR="${ROOT_DIR}" \
+            MBR_RECONCILE_DESIRED_STATE_PATH="${ROOT_DIR}/extensions/desired-state.yaml" \
+            MBR_RECONCILE_ARTIFACT_DIR="${ROOT_DIR}/reconcile-artifacts/extensions" \
+            MBR_RECONCILE_ACTOR="system:mbr-deploy" \
+              bash /tmp/mbr-extract/deploy/reconcile-extensions.sh apply-all
+
+            sudo /bin/systemctl stop "mbr-${ACTIVE_SLOT}" 2>/dev/null || true
+            sudo /bin/systemctl disable "mbr-${ACTIVE_SLOT}" 2>/dev/null || true
+            sudo /bin/systemctl enable "mbr-${DEPLOY_SLOT}" 2>/dev/null || true
 
             echo "${DEPLOY_SLOT}" | sudo tee "${ROOT_DIR}/.active-slot" >/dev/null
-            sudo chown mbr:mbr "${ROOT_DIR}/.active-slot"
+            sudo /bin/chown mbr:mbr "${ROOT_DIR}/.active-slot"
 
-            # Update Prometheus file-based service discovery target (if configured)
-            if command -v update-prometheus-target >/dev/null 2>&1; then
-              sudo update-prometheus-target mbr "${DEPLOY_SLOT}"
+            # Update Prometheus file-based service discovery target
+            if [ -x /usr/local/bin/update-prometheus-target ]; then
+              sudo /usr/local/bin/update-prometheus-target mbr "${DEPLOY_SLOT}"
             fi
 
+            # Reconcile the fleet heartbeat timer with the disclosed setting.
+            # The timer is only started here if it is already enabled on the
+            # host; registration (Register Fleet workflow) is what enables it.
             if [ "${FLEET_HEARTBEAT_ENABLED}" = "true" ]; then
-              if sudo systemctl is-enabled mbr-fleet-heartbeat.timer >/dev/null 2>&1; then
-                sudo systemctl restart mbr-fleet-heartbeat.timer
+              if systemctl is-enabled mbr-fleet-heartbeat.timer >/dev/null 2>&1; then
+                sudo /bin/systemctl restart mbr-fleet-heartbeat.timer
               fi
             else
-              sudo systemctl stop mbr-fleet-heartbeat.timer 2>/dev/null || true
-              sudo systemctl disable mbr-fleet-heartbeat.timer 2>/dev/null || true
+              sudo /bin/systemctl stop mbr-fleet-heartbeat.timer 2>/dev/null || true
+              sudo /bin/systemctl disable mbr-fleet-heartbeat.timer 2>/dev/null || true
             fi
 
             rm -rf /tmp/mbr-extract /tmp/mbr-deploy.tar.gz
@@ -373,6 +590,32 @@ jobs:
             echo "Health verification failed"
             exit 1
           fi
+
+      - name: Download reconciliation artifacts
+        env:
+          DEPLOY_HOST: ${{ steps.config.outputs.deploy_host }}
+          ROOT_DIR: ${{ steps.config.outputs.root_dir }}
+        run: |
+          mkdir -p artifacts/reconcile
+          scp -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no \
+            "mbr@${DEPLOY_HOST}:${ROOT_DIR}/reconcile-artifacts/extensions/plan.json" \
+            artifacts/reconcile/plan.json
+          scp -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no \
+            "mbr@${DEPLOY_HOST}:${ROOT_DIR}/reconcile-artifacts/extensions/apply.json" \
+            artifacts/reconcile/apply.json
+          scp -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no \
+            "mbr@${DEPLOY_HOST}:${ROOT_DIR}/reconcile-artifacts/extensions/check.json" \
+            artifacts/reconcile/check.json
+          scp -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no \
+            "mbr@${DEPLOY_HOST}:${ROOT_DIR}/reconcile-artifacts/extensions/runtime-manifest.json" \
+            artifacts/reconcile/runtime-manifest.json
+
+      - name: Upload reconciliation artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: extension-reconcile-${{ inputs.environment }}
+          path: artifacts/reconcile/
+          if-no-files-found: error
 
       - name: Smoke tests
         env:
@@ -440,6 +683,12 @@ jobs:
           - \`${SERVICES_ARTIFACT}\`
           - \`${MIGRATIONS_ARTIFACT}\`
           - local deploy assets from this instance repo
+
+          ### Reconciliation Artifacts
+          - \`artifacts/reconcile/plan.json\`
+          - \`artifacts/reconcile/apply.json\`
+          - \`artifacts/reconcile/check.json\`
+          - \`artifacts/reconcile/runtime-manifest.json\`
 
           ### Endpoints
           - https://${APP_DOMAIN}

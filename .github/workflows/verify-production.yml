@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout instance repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Load instance configuration
         id: config
@@ -26,12 +26,50 @@ jobs:
           chmod +x scripts/read-instance-config.sh
           scripts/read-instance-config.sh mbr.instance.yaml >> "$GITHUB_OUTPUT"
 
+      - name: Resolve expected core release commit
+        id: core_release
+        env:
+          CORE_VERSION: ${{ steps.config.outputs.core_version }}
+        run: |
+          EXPECTED_COMMIT=$(git ls-remote --tags https://github.com/MoveBigRocks/platform.git "${CORE_VERSION}^{}" | awk '{print $1}')
+          if [ -z "${EXPECTED_COMMIT}" ]; then
+            echo "Could not resolve platform tag ${CORE_VERSION} to a commit"
+            exit 1
+          fi
+          {
+            echo "commit=${EXPECTED_COMMIT}"
+            echo "short_commit=$(printf '%s' "${EXPECTED_COMMIT}" | cut -c1-7)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" | base64 -d > ~/.ssh/id_ed25519_deploy
           chmod 600 ~/.ssh/id_ed25519_deploy
           ssh-keygen -y -f ~/.ssh/id_ed25519_deploy >/dev/null 2>&1 || { echo "Invalid SSH key"; exit 1; }
+
+      - name: Run extension desired-state check
+        env:
+          DEPLOY_HOST: ${{ steps.config.outputs.deploy_host }}
+          ROOT_DIR: ${{ steps.config.outputs.root_dir }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no "mbr@${DEPLOY_HOST}" \
+            "MBR_RECONCILE_ROOT_DIR='${ROOT_DIR}' MBR_RECONCILE_DESIRED_STATE_PATH='${ROOT_DIR}/extensions/desired-state.yaml' MBR_RECONCILE_ARTIFACT_DIR='${ROOT_DIR}/reconcile-artifacts/extensions' MBR_RECONCILE_ACTOR='system:mbr-verify' bash '${ROOT_DIR}/deploy/reconcile-extensions.sh' check"
+
+          mkdir -p artifacts/reconcile
+          scp -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no \
+            "mbr@${DEPLOY_HOST}:${ROOT_DIR}/reconcile-artifacts/extensions/check.json" \
+            artifacts/reconcile/check.json
+          scp -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no \
+            "mbr@${DEPLOY_HOST}:${ROOT_DIR}/reconcile-artifacts/extensions/runtime-manifest.json" \
+            artifacts/reconcile/runtime-manifest.json
+
+      - name: Upload reconciliation verification artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: extension-reconcile-verify-production
+          path: artifacts/reconcile/
+          if-no-files-found: error
 
       - name: Wait for service stability
         env:
@@ -86,6 +124,7 @@ jobs:
         env:
           DEPLOY_HOST: ${{ steps.config.outputs.deploy_host }}
           ROOT_DIR: ${{ steps.config.outputs.root_dir }}
+          EXPECTED_CORE_COMMIT: ${{ steps.core_release.outputs.short_commit }}
         run: |
           ssh -i ~/.ssh/id_ed25519_deploy -o StrictHostKeyChecking=no "mbr@${DEPLOY_HOST}" <<EOF
             ACTIVE_SLOT=\$(cat "${ROOT_DIR}/.active-slot" 2>/dev/null || echo "blue")
@@ -94,8 +133,11 @@ jobs:
             else
               PORT=8081
             fi
-            HTTP_STATUS=\$(curl -sf "http://localhost:\${PORT}/health" 2>/dev/null || echo "failed")
-            echo "\${HTTP_STATUS}" | grep -q '"status"' || exit 1
+            HEALTH_JSON=\$(curl -sf "http://localhost:\${PORT}/health" 2>/dev/null || echo "failed")
+            echo "\${HEALTH_JSON}" | grep -q '"status"' || exit 1
+            RUNNING_COMMIT=\$(printf '%s' "\${HEALTH_JSON}" | jq -r '.build.git_commit // .git_commit // empty')
+            echo "Running core commit: \${RUNNING_COMMIT}"
+            test "\${RUNNING_COMMIT}" = "${EXPECTED_CORE_COMMIT}"
           EOF
 
       - name: Verify internal admin login page
@@ -184,8 +226,10 @@ jobs:
           ## Production Verification Complete
 
           Verified:
+          - desired-state reconciliation check
           - active slot stability
           - internal API health
+          - pinned core release commit
           - internal admin login page
           - database status
           - recent service logs

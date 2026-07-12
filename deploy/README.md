@@ -113,6 +113,12 @@ RATE_LIMIT_ENABLED=true
 RATE_LIMIT_PER_MIN=60
 METRICS_TOKEN=<openssl rand -hex 32>
 TRUSTED_PROXIES=127.0.0.1,::1
+
+# Extension runtime (RFC-0016). The core supervises extension runtimes as
+# in-process children and slot-scopes their sockets under this directory.
+INSTANCE_ID=<instance id from mbr.instance.yaml>
+EXTENSION_RUNTIME_DIR=/opt/mbr/tmp/extensions
+EXTENSION_TRUST_REQUIRE_VERIFICATION=false
 ```
 
 The fleet config file generated from `mbr.instance.yaml` looks like:
@@ -151,6 +157,15 @@ For a real Move Big Rocks site launch, also use:
 ## Upgrading Core
 
 See [UPGRADE.md](UPGRADE.md) for the step-by-step process to deploy a new platform release.
+
+## Extensions
+
+`extensions/desired-state.yaml` is the declarative source of truth for which
+extensions this instance runs. Every deploy renders a runtime manifest from it,
+pulls the required runtime binaries, and reconciles the live instance to match.
+Extension runtimes are supervised in-process by the active `mbr-<slot>` core
+(RFC-0016), not as standalone systemd units. See
+[EXTENSION_RECONCILIATION.md](EXTENSION_RECONCILIATION.md).
 
 ## Service Management
 
@@ -208,7 +223,7 @@ journalctl -u mbr-green -n 100 --no-pager
    - `serve_from_sub_path = true`
    - `allow_embedding = true` (under `[security]`)
    - `enabled = true` under `[auth.anonymous]`
-3. Verify the admin subdomain Caddy block does NOT have a `handle /grafana/*` direct proxy — the app handles Grafana proxying with auth
+3. Verify the admin subdomain Caddy block does NOT have a `handle /grafana/*` direct proxy. The app handles Grafana proxying with auth
 4. Verify `header /grafana/* { -X-Frame-Options }` is set in the admin Caddy block
 
 ### Admin metrics page returns 404

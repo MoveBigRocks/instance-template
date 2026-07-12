@@ -1,8 +1,12 @@
 # Sudoers configuration for mbr user
-# Installed by setup.sh to /etc/sudoers.d/mbr
+# Installed by setup.sh AND re-synced by every production deploy.
 #
-# Allows the mbr user to manage services and deploy binaries
-# without password prompts (required for CI/CD automation)
+# Allows the mbr user to manage blue-green services and deploy binaries
+# without password prompts (required for CI/CD automation).
+#
+# Extension runtimes are NOT listed here. As of RFC-0016 the core mbr service
+# supervises them as child processes; systemctl has no role in their lifecycle,
+# so no sudo rules are needed per extension.
 
 # Blue-green service management
 mbr ALL=(ALL) NOPASSWD: /bin/systemctl start mbr-blue
@@ -30,11 +34,24 @@ mbr ALL=(ALL) NOPASSWD: /bin/systemctl disable mbr-fleet-heartbeat.timer
 mbr ALL=(ALL) NOPASSWD: /bin/systemctl stop mbr
 mbr ALL=(ALL) NOPASSWD: /bin/systemctl disable mbr
 
+# Legacy per-extension runtime cleanup (RFC-0016 one-shot)
+# Allow the deploy to stop, disable, and remove any pre-existing
+# mbr-extension-runtime@*.service instance files that predate RFC-0016.
+# Wildcard is narrow and bounded to the instance shape of that template.
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl stop mbr-extension-runtime@*
+mbr ALL=(ALL) NOPASSWD: /bin/systemctl disable mbr-extension-runtime@*
+mbr ALL=(ALL) NOPASSWD: /bin/rm -f /etc/systemd/system/mbr-extension-runtime@*.service
+mbr ALL=(ALL) NOPASSWD: /bin/rm -f /etc/systemd/system/mbr-extension-runtime@.service
+
 # Systemd reload
 mbr ALL=(ALL) NOPASSWD: /bin/systemctl daemon-reload
 
 # Caddy management
 mbr ALL=(ALL) NOPASSWD: /bin/systemctl reload caddy
+
+# Prometheus target management
+mbr ALL=(ALL) NOPASSWD: /usr/local/bin/update-prometheus-target mbr blue
+mbr ALL=(ALL) NOPASSWD: /usr/local/bin/update-prometheus-target mbr green
 
 # File operations for deployment
 mbr ALL=(ALL) NOPASSWD: /bin/cp /tmp/mbr-extract/mbr-server /opt/mbr/mbr-blue
@@ -50,6 +67,13 @@ mbr ALL=(ALL) NOPASSWD: /bin/chmod +x /opt/mbr/mbr-blue
 mbr ALL=(ALL) NOPASSWD: /bin/chmod +x /opt/mbr/mbr-green
 mbr ALL=(ALL) NOPASSWD: /bin/rm -f /etc/systemd/system/mbr.service
 mbr ALL=(ALL) NOPASSWD: /usr/bin/tee /opt/mbr/.active-slot
+
+# Sudoers re-sync on every deploy. Without this, rule additions in the
+# repo drift from /etc/sudoers.d/mbr on the host. visudo -cf validates
+# the file before install; failed validation aborts the deploy.
+mbr ALL=(ALL) NOPASSWD: /usr/sbin/visudo -cf /tmp/mbr-extract/deploy/mbr-sudoers
+mbr ALL=(ALL) NOPASSWD: /bin/cp /tmp/mbr-extract/deploy/mbr-sudoers /etc/sudoers.d/mbr
+mbr ALL=(ALL) NOPASSWD: /bin/chmod 440 /etc/sudoers.d/mbr
 
 # Log access for monitoring and debugging
 mbr ALL=(ALL) NOPASSWD: /bin/journalctl -u mbr-blue *

@@ -25,6 +25,11 @@ fi
 # Create directories
 echo "Creating directories..."
 mkdir -p /opt/mbr/{data,migrations,deploy,.ssh}
+# RFC-0016 extension runtime layout. The core mbr service supervises extension
+# runtimes as in-process children and reads binaries from extensions-runtime/bin,
+# with slot-scoped runtime sockets created under tmp/extensions/<slot>.
+mkdir -p /opt/mbr/extensions-runtime/{bin,env}
+mkdir -p /opt/mbr/tmp/extensions
 chmod 700 /opt/mbr/.ssh
 chown -R mbr:mbr /opt/mbr
 
@@ -108,6 +113,11 @@ fi
 if [ -f "${SCRIPT_DIR}/mbr-fleet-heartbeat.timer" ]; then
     cp "${SCRIPT_DIR}/mbr-fleet-heartbeat.timer" /etc/systemd/system/
 fi
+# No per-extension runtime unit is installed. As of RFC-0016, extension
+# runtimes are supervised in-process by the core mbr service; systemctl has no
+# role in their lifecycle. Any legacy mbr-extension-runtime@*.service instance
+# units are stopped and removed automatically on the next production deploy
+# (see .github/workflows/_deploy.yml).
 if [ -f "${SCRIPT_DIR}/prometheus.service" ]; then
     cp "${SCRIPT_DIR}/prometheus.service" /etc/systemd/system/
 fi

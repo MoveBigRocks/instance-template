@@ -79,11 +79,15 @@ gh run watch
 
 The workflow will:
 1. Parse `mbr.instance.yaml` for artifact references
-2. Pull OCI artifacts from ghcr.io
-3. SSH to the server and deploy to the inactive blue/green slot
-4. Health-check the new slot on localhost
-5. Switch traffic to the new slot
-6. Run smoke tests against the public endpoints
+2. Verify pin integrity: the pinned tag's git commit in the platform repo must
+   match the commit embedded in the OCI manifest, or the deploy aborts
+3. Pull OCI artifacts from ghcr.io
+4. Reconcile extensions from `extensions/desired-state.yaml` and archive the
+   plan, apply, check, and runtime-manifest artifacts
+5. SSH to the server and deploy to the inactive blue/green slot
+6. Health-check the new slot on localhost
+7. Switch traffic to the new slot
+8. Run smoke tests against the public endpoints
 
 ### 6. Verify
 
