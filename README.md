@@ -123,3 +123,21 @@ Validate it before or after export with:
 ```bash
 make validate-instance-template
 ```
+
+## Customer-Zero Preflight
+
+The scheduled and manual `Customer-Zero Preflight` workflow exercises the
+parts of a first install that can be proven without a customer's host or
+credentials: the latest released OCI digests and signing identity, a fully
+materialized instance config, the public binary installer, the CLI command
+contract, and extension desired state.
+
+Run the same proof locally after installing `oras` and `cosign`:
+
+```bash
+bash scripts/customer-zero-preflight.sh
+```
+
+This is a fail-fast preflight, not a substitute for the first real Ubuntu host
+deployment. DNS, SSH, email delivery, object storage, backup restore, login,
+and workspace creation remain part of that host-specific customer-zero run.

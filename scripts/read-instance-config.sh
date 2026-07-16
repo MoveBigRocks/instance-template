@@ -102,6 +102,9 @@ core_version = fetch_required(release, %w[version])
 services_artifact = fetch_optional(release, %w[servicesArtifact], fetch_optional(release, %w[apiArtifact]))
 migrations_artifact = fetch_required(release, %w[migrationsArtifact])
 manifest_artifact = fetch_required(release, %w[manifestArtifact])
+services_digest = fetch_optional(release, %w[servicesDigest])
+migrations_digest = fetch_optional(release, %w[migrationsDigest])
+manifest_digest = fetch_optional(release, %w[manifestDigest])
 break_glass_admin_email = fetch_required(auth, %w[breakGlassAdminEmail])
 email_provider = fetch_required(outbound, %w[provider])
 email_from_email = fetch_required(outbound, %w[fromEmail])
@@ -121,6 +124,13 @@ fleet_use_case = fetch_required(fleet_registration, %w[useCase])
 fleet_registration_source = fetch_optional(fleet_registration, %w[source], "self_hosted")
 fleet_heartbeat_enabled = fetch_required(fleet_heartbeat, %w[enabled])
 fleet_api_url = normalize_api_base_url(fleet_endpoint)
+security = fetch_optional(spec, %w[security], {})
+artifact_signature = fetch_optional(security, %w[artifactSignature], {})
+require_cosign = fetch_optional(artifact_signature, %w[requireCosign], true)
+cosign_verification_mode = fetch_optional(artifact_signature, %w[verificationMode], "keyless")
+cosign_public_key_file = fetch_optional(artifact_signature, %w[cosignPublicKeyFile], "security/cosign.pub")
+cosign_certificate_identity = fetch_optional(artifact_signature, %w[certificateIdentity])
+cosign_certificate_oidc_issuer = fetch_optional(artifact_signature, %w[certificateOidcIssuer], "https://token.actions.githubusercontent.com")
 
 raise "spec.deployment.release.core.servicesArtifact is required" if services_artifact.to_s.empty?
 raise "spec.deployment.linuxTarget.host must not include a user prefix" if deploy_host.include?("@")
@@ -132,6 +142,27 @@ assert_allowed("spec.email.inbound.provider", inbound_provider, %w[postmark ses 
 assert_allowed("spec.storage.provider", storage_provider, %w[s3-compatible filesystem])
 assert_allowed("spec.fleet.registration.useCase", fleet_use_case, %w[internal_ops startup client_deployment personal other])
 assert_allowed("spec.fleet.registration.source", fleet_registration_source, %w[self_hosted managed])
+assert_allowed("spec.security.artifactSignature.verificationMode", cosign_verification_mode, %w[key keyless])
+
+{
+  "servicesDigest" => services_digest,
+  "migrationsDigest" => migrations_digest,
+  "manifestDigest" => manifest_digest,
+}.each do |name, digest|
+  next if digest.to_s.empty?
+  unless digest.to_s.match?(/\Asha256:[0-9a-f]{64}\z/)
+    raise "spec.deployment.release.core.#{name} must be an sha256 digest"
+  end
+end
+
+if require_cosign.to_s == "true" && cosign_verification_mode == "keyless"
+  if cosign_certificate_identity.to_s.empty?
+    raise "spec.security.artifactSignature.certificateIdentity is required for keyless verification"
+  end
+  if cosign_certificate_oidc_issuer.to_s.empty?
+    raise "spec.security.artifactSignature.certificateOidcIssuer is required for keyless verification"
+  end
+end
 
 if storage_provider == "s3-compatible" && storage_region.to_s.empty?
   raise "spec.storage.region is required when using s3-compatible storage"
@@ -159,6 +190,9 @@ emit("core_version", core_version)
 emit("services_artifact", services_artifact)
 emit("migrations_artifact", migrations_artifact)
 emit("manifest_artifact", manifest_artifact)
+emit("services_digest", services_digest)
+emit("migrations_digest", migrations_digest)
+emit("manifest_digest", manifest_digest)
 emit("break_glass_admin_email", break_glass_admin_email)
 emit("email_provider", email_provider)
 emit("email_from_email", email_from_email)
@@ -178,4 +212,9 @@ emit("fleet_operator_email", fleet_operator_email)
 emit("fleet_use_case", fleet_use_case)
 emit("fleet_registration_source", fleet_registration_source)
 emit("fleet_heartbeat_enabled", fleet_heartbeat_enabled)
+emit("require_cosign", require_cosign)
+emit("cosign_verification_mode", cosign_verification_mode)
+emit("cosign_public_key_file", cosign_public_key_file)
+emit("cosign_certificate_identity", cosign_certificate_identity)
+emit("cosign_certificate_oidc_issuer", cosign_certificate_oidc_issuer)
 RUBY

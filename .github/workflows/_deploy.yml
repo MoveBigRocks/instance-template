@@ -106,6 +106,77 @@ jobs:
           echo "Pin integrity OK: ${CORE_VERSION} -> ${GIT_TAG_COMMIT}"
           rm -rf /tmp/pin-check
 
+      - name: Verify immutable artifact digests
+        env:
+          SERVICES_ARTIFACT: ${{ steps.config.outputs.services_artifact }}
+          MIGRATIONS_ARTIFACT: ${{ steps.config.outputs.migrations_artifact }}
+          MANIFEST_ARTIFACT: ${{ steps.config.outputs.manifest_artifact }}
+          SERVICES_DIGEST: ${{ steps.config.outputs.services_digest }}
+          MIGRATIONS_DIGEST: ${{ steps.config.outputs.migrations_digest }}
+          MANIFEST_DIGEST: ${{ steps.config.outputs.manifest_digest }}
+        run: |
+          set -euo pipefail
+          verify_digest() {
+            name="$1"
+            ref="$2"
+            pinned="$3"
+            resolved=$(oras manifest fetch --descriptor "${ref}" | jq -r '.digest')
+            if [ -z "${resolved}" ] || [ "${resolved}" = null ]; then
+              echo "::error::could not resolve digest for ${name} (${ref})"
+              exit 1
+            fi
+            if [ -z "${pinned}" ]; then
+              echo "::warning::${name} has no immutable digest pin; ${ref} resolves to ${resolved}"
+              return 0
+            fi
+            if [ "${resolved}" != "${pinned}" ]; then
+              echo "::error::${name} digest mismatch: ${ref} resolves to ${resolved}, expected ${pinned}"
+              exit 1
+            fi
+            echo "${name}: verified ${pinned}"
+          }
+          verify_digest services "${SERVICES_ARTIFACT}" "${SERVICES_DIGEST}"
+          verify_digest migrations "${MIGRATIONS_ARTIFACT}" "${MIGRATIONS_DIGEST}"
+          verify_digest manifest "${MANIFEST_ARTIFACT}" "${MANIFEST_DIGEST}"
+
+      - name: Verify artifact signatures (cosign)
+        env:
+          REQUIRE_COSIGN: ${{ steps.config.outputs.require_cosign }}
+          COSIGN_VERIFICATION_MODE: ${{ steps.config.outputs.cosign_verification_mode }}
+          COSIGN_KEY_FILE: ${{ steps.config.outputs.cosign_public_key_file }}
+          COSIGN_CERTIFICATE_IDENTITY: ${{ steps.config.outputs.cosign_certificate_identity }}
+          COSIGN_CERTIFICATE_OIDC_ISSUER: ${{ steps.config.outputs.cosign_certificate_oidc_issuer }}
+          SERVICES_ARTIFACT: ${{ steps.config.outputs.services_artifact }}
+          MIGRATIONS_ARTIFACT: ${{ steps.config.outputs.migrations_artifact }}
+          MANIFEST_ARTIFACT: ${{ steps.config.outputs.manifest_artifact }}
+        run: |
+          set -euo pipefail
+          if [ "${REQUIRE_COSIGN}" != true ] && [ ! -f "${COSIGN_KEY_FILE}" ]; then
+            echo "cosign verification is not required and no public key is configured; skipping"
+            exit 0
+          fi
+          if [ "${COSIGN_VERIFICATION_MODE}" = key ] && [ ! -f "${COSIGN_KEY_FILE}" ]; then
+            echo "::error::cosign public key ${COSIGN_KEY_FILE} is required but missing"
+            exit 1
+          fi
+
+          cosign_version=v2.4.1
+          curl -fsSLo cosign "https://github.com/sigstore/cosign/releases/download/${cosign_version}/cosign-linux-amd64"
+          chmod +x cosign
+          sudo mv cosign /usr/local/bin/cosign
+
+          for ref in "${SERVICES_ARTIFACT}" "${MIGRATIONS_ARTIFACT}" "${MANIFEST_ARTIFACT}"; do
+            echo "Verifying cosign signature for ${ref}"
+            if [ "${COSIGN_VERIFICATION_MODE}" = keyless ]; then
+              cosign verify \
+                --certificate-identity "${COSIGN_CERTIFICATE_IDENTITY}" \
+                --certificate-oidc-issuer "${COSIGN_CERTIFICATE_OIDC_ISSUER}" \
+                "${ref}" >/dev/null
+            else
+              cosign verify --key "${COSIGN_KEY_FILE}" "${ref}" >/dev/null
+            fi
+          done
+
       - name: Pull release artifacts
         env:
           SERVICES_ARTIFACT: ${{ steps.config.outputs.services_artifact }}

@@ -25,6 +25,11 @@ spec:
         servicesArtifact: ghcr.io/movebigrocks/mbr-services:vX.Y.Z
         migrationsArtifact: ghcr.io/movebigrocks/mbr-migrations:vX.Y.Z
         manifestArtifact: ghcr.io/movebigrocks/mbr-manifest:vX.Y.Z
+        # Resolve and pin these immutable digests before the first production
+        # deploy. The deploy rejects a tag whose registry digest differs.
+        servicesDigest: ""
+        migrationsDigest: ""
+        manifestDigest: ""
   auth:
     mode: magic-link
     breakGlassAdminEmail: owner@example.com
@@ -85,5 +90,15 @@ spec:
   branding:
     file: branding/site.json
   security:
+    artifactSignature:
+      # First-party release artifacts are signed keylessly by this exact
+      # GitHub Actions OIDC identity. Production deploys fail closed when the
+      # signature is absent or comes from any other workflow.
+      requireCosign: true
+      verificationMode: keyless
+      certificateIdentity: https://github.com/MoveBigRocks/platform/.github/workflows/production.yml@refs/heads/main
+      certificateOidcIssuer: https://token.actions.githubusercontent.com
+      # Switch verificationMode to key to use a customer-owned public key.
+      cosignPublicKeyFile: security/cosign.pub
     extensionThreatModelFile: security/extension-threat-model.md
     extensionReviewChecklistFile: security/review-checklist.md

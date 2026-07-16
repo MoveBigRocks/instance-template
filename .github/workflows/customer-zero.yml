@@ -1,0 +1,69 @@
+name: Customer-Zero Preflight
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '31 5 * * *'
+  workflow_dispatch:
+    inputs:
+      platform_version:
+        description: Optional released platform tag (defaults to latest)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: instance-template-customer-zero
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: Exercise a fresh operator preflight
+    runs-on: ubuntu-latest
+    env:
+      MBR_CUSTOMER_ZERO_VERSION: ${{ inputs.platform_version }}
+
+    steps:
+      - name: Checkout instance template
+        uses: actions/checkout@v6
+
+      - name: Validate shell and workflow syntax
+        run: |
+          set -euo pipefail
+          find scripts deploy -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          actionlint -shellcheck= .github/workflows/*.yml
+
+      - name: Install ORAS
+        run: |
+          version=1.2.3
+          curl -fsSLO "https://github.com/oras-project/oras/releases/download/v${version}/oras_${version}_linux_amd64.tar.gz"
+          tar -xzf "oras_${version}_linux_amd64.tar.gz" oras
+          sudo install -m 0755 oras /usr/local/bin/oras
+
+      - name: Install cosign
+        run: |
+          version=v2.4.1
+          curl -fsSLo cosign "https://github.com/sigstore/cosign/releases/download/${version}/cosign-linux-amd64"
+          sudo install -m 0755 cosign /usr/local/bin/cosign
+
+      - name: Exercise release, config, installer, and CLI contracts
+        run: bash scripts/customer-zero-preflight.sh
+
+      - name: Publish evidence summary
+        if: always()
+        run: |
+          {
+            echo "## Customer-zero preflight"
+            echo
+            echo "- Release input: \`${MBR_CUSTOMER_ZERO_VERSION:-latest}\`"
+            echo "- OCI digest and keyless signature verification"
+            echo "- Materialized instance configuration validation"
+            echo "- Public installer execution"
+            echo "- CLI command-contract validation"
+            echo "- Extension desired-state validation"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -65,6 +65,7 @@ APPLY_PATHS=(
   ".github/workflows/register-fleet.yml"
   ".github/workflows/manage-extensions.yml"
   ".github/workflows/commit-messages.yml"
+  ".github/workflows/customer-zero.yml"
   ".github/scripts/validate-commit-message.sh"
   ".githooks/commit-msg"
   "deploy/setup.sh"
@@ -78,6 +79,8 @@ APPLY_PATHS=(
   "scripts/read-instance-config.sh"
   "scripts/validate-extension-desired-state.sh"
   "scripts/sync-from-template.sh"
+  "scripts/customer-zero-preflight.sh"
+  "scripts/export-instance-template.sh"
   "security/extension-threat-model.md"
   "security/review-checklist.md"
 )
