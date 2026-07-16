@@ -58,7 +58,9 @@ spec:
     # Explicit control-plane registration for support, grandfathering, and
     # future commercial entitlements. The core platform still runs if this
     # endpoint is unreachable.
-    endpoint: https://movebigrocks.com
+    # Use the control plane's API origin directly. The CLI preserves hosts
+    # already prefixed with api. and appends the fleet route safely.
+    endpoint: https://api.mbr.demandops.com
     registration:
       operatorEmail: owner@example.com
       useCase: internal_ops
