@@ -124,7 +124,7 @@ EXTENSION_TRUST_REQUIRE_VERIFICATION=false
 The fleet config file generated from `mbr.instance.yaml` looks like:
 
 ```bash
-MBR_FLEET_API_URL=https://api.movebigrocks.com
+MBR_FLEET_API_URL=https://api.mbr.demandops.com
 MBR_FLEET_INSTANCE_ID=inst_example_prod
 MBR_FLEET_INSTANCE_NAME=example-prod
 MBR_FLEET_PLATFORM_VERSION=v0.8.1
