@@ -53,11 +53,12 @@ jobs:
         #   1. Pinning a semver that the Release Pipeline annotated before the
         #      OCI semver tag step finished (older-sibling commit still
         #      latest-tag for a few seconds).
-        #   2. Operator error: pinning a version whose git tag points at a
-        #      different commit than the one assumed.
-        # Both resolve to the same check: the git tag for the pinned version
-        # and the OCI image tagged with that version must refer to the same
-        # commit. If they disagree, or if either is missing, abort.
+        #   2. Operator error: pinning a version whose published release
+        #      records a different commit than the one assumed.
+        # Both resolve to the same check: the published release manifest for
+        # the pinned version and the OCI image tagged with that version must
+        # refer to the same commit. If they disagree, or if either is
+        # missing, abort.
         env:
           CORE_VERSION: ${{ steps.config.outputs.core_version }}
           SERVICES_ARTIFACT: ${{ steps.config.outputs.services_artifact }}
@@ -65,24 +66,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          echo "Verifying platform tag integrity for ${CORE_VERSION}"
+          echo "Verifying published release integrity for ${CORE_VERSION}"
 
-          # Resolve the commit SHA the git tag points at. The tag can be
-          # annotated (-> tag object -> commit) or lightweight (-> commit
-          # directly); follow both.
-          GIT_TAG_COMMIT="$(gh api "repos/MoveBigRocks/platform/git/refs/tags/${CORE_VERSION}" \
-            --jq '.object.sha' 2>/dev/null || echo '')"
+          # Resolve the commit SHA recorded in the published release manifest
+          # in the public MoveBigRocks/releases mirror.
+          GIT_TAG_COMMIT="$(curl -fsSL "https://github.com/MoveBigRocks/releases/releases/download/${CORE_VERSION}/release-manifest.json" \
+            | jq -r '.git_sha // empty' 2>/dev/null || echo '')"
           if [ -z "${GIT_TAG_COMMIT}" ]; then
-            echo "::error::git tag ${CORE_VERSION} not found in MoveBigRocks/platform"
+            echo "::error::release ${CORE_VERSION} not found in the MoveBigRocks/releases mirror"
             exit 1
           fi
-          TAG_OBJECT_TYPE="$(gh api "repos/MoveBigRocks/platform/git/refs/tags/${CORE_VERSION}" \
-            --jq '.object.type')"
-          if [ "${TAG_OBJECT_TYPE}" = "tag" ]; then
-            GIT_TAG_COMMIT="$(gh api "repos/MoveBigRocks/platform/git/tags/${GIT_TAG_COMMIT}" \
-              --jq '.object.sha')"
-          fi
-          echo "git tag ${CORE_VERSION} -> ${GIT_TAG_COMMIT}"
+          echo "published release ${CORE_VERSION} -> ${GIT_TAG_COMMIT}"
 
           # Resolve the commit embedded in the OCI manifest the deploy would
           # actually pull. The release pipeline writes the git SHA into the
@@ -100,7 +94,7 @@ jobs:
           # Normalise to matching prefix lengths to allow short-sha manifests.
           GIT_SHORT="${GIT_TAG_COMMIT:0:${#OCI_COMMIT}}"
           if [ "${GIT_SHORT}" != "${OCI_COMMIT}" ] && [ "${GIT_TAG_COMMIT}" != "${OCI_COMMIT}" ]; then
-            echo "::error::pin integrity failure: git tag ${CORE_VERSION} (${GIT_TAG_COMMIT}) and OCI manifest (${OCI_COMMIT}) disagree on commit. Likely cause: the pin was written before the Release Pipeline finished tagging the OCI artifacts, or the pin points at a stale version."
+            echo "::error::pin integrity failure: published release ${CORE_VERSION} (${GIT_TAG_COMMIT}) and OCI manifest (${OCI_COMMIT}) disagree on commit. Likely cause: the pin was written before the Release Pipeline finished tagging the OCI artifacts, or the pin points at a stale version."
             exit 1
           fi
           echo "Pin integrity OK: ${CORE_VERSION} -> ${GIT_TAG_COMMIT}"

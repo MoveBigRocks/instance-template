@@ -35,5 +35,6 @@ When editing, keep instructions generic (use `yourdomain.com`, `your-server-ip`,
 
 ## Related Docs
 
-- [Customer Instance Setup](https://github.com/MoveBigRocks/platform/blob/main/docs/CUSTOMER_INSTANCE_SETUP.md)
-- [Release Artifact Contract](https://github.com/MoveBigRocks/platform/blob/main/docs/RELEASE_ARTIFACT_CONTRACT.md)
+- [Self-host guide](https://movebigrocks.com/docs/self-host)
+- [Security guide](https://movebigrocks.com/docs/security)
+- [Published releases](https://github.com/MoveBigRocks/releases)

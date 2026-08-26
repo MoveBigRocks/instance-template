@@ -31,9 +31,9 @@ jobs:
         env:
           CORE_VERSION: ${{ steps.config.outputs.core_version }}
         run: |
-          EXPECTED_COMMIT=$(git ls-remote --tags https://github.com/MoveBigRocks/platform.git "${CORE_VERSION}^{}" | awk '{print $1}')
+          EXPECTED_COMMIT=$(curl -fsSL "https://github.com/MoveBigRocks/releases/releases/download/${CORE_VERSION}/release-manifest.json" | jq -r '.git_sha // empty')
           if [ -z "${EXPECTED_COMMIT}" ]; then
-            echo "Could not resolve platform tag ${CORE_VERSION} to a commit"
+            echo "Could not resolve release ${CORE_VERSION} from the MoveBigRocks/releases mirror"
             exit 1
           fi
           {

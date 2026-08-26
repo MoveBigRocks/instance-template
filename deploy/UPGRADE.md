@@ -20,31 +20,21 @@ The upgrade path is:
 
 ### 1. Find the latest platform release
 
-Check the [platform releases on GitHub](https://github.com/MoveBigRocks/platform/tags).
+Check the [published releases on GitHub](https://github.com/MoveBigRocks/releases/releases).
 
-Or from a local clone of the platform repo:
-
-```bash
-cd /path/to/platform
-git fetch --tags
-git tag --sort=-v:refname | head -5
-```
-
-To see what changed since your currently pinned version:
+Or from the command line:
 
 ```bash
-git log v1.0.0..v1.1.0 --oneline
+gh release list --repo MoveBigRocks/releases --limit 5
 ```
 
-### 2. Verify the CI pipeline succeeded
+### 2. Verify the release is fully published
 
-The platform's Release Pipeline must have completed successfully for the target version:
+A published release in `MoveBigRocks/releases` means the Release Pipeline completed and the OCI artifacts (`mbr-services`, `mbr-migrations`, `mbr-manifest`) are published and tagged. Confirm the target version's manifest is downloadable:
 
 ```bash
-gh run list --repo MoveBigRocks/platform --workflow production.yml --limit 5
+curl -fsSL "https://github.com/MoveBigRocks/releases/releases/download/vX.Y.Z/release-manifest.json" | jq .version
 ```
-
-A successful run means the OCI artifacts (`mbr-services`, `mbr-migrations`, `mbr-manifest`) are published and tagged.
 
 ### 3. Update mbr.instance.yaml
 

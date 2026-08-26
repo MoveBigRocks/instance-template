@@ -18,7 +18,7 @@ This source tree is:
 
 This source tree is not:
 
-- the whole public core repo
+- the platform core itself, which arrives as tagged release artifacts
 - a live DemandOps or customer instance
 - a place to store secrets
 - a place to author first-party paid extension source

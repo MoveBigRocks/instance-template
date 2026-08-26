@@ -17,9 +17,9 @@ spec:
       rootDir: /opt/mbr
     release:
       # Pin all four fields to the SAME released platform tag. Replace vX.Y.Z
-      # with a real tag from https://github.com/MoveBigRocks/platform/tags.
-      # See deploy/UPGRADE.md. The deploy verifies that this tag's git commit
-      # and its OCI manifest agree before rolling out.
+      # with a real tag from https://github.com/MoveBigRocks/releases/tags.
+      # See deploy/UPGRADE.md. The deploy verifies that this release's
+      # published git commit and its OCI manifest agree before rolling out.
       core:
         version: vX.Y.Z
         servicesArtifact: ghcr.io/movebigrocks/mbr-services:vX.Y.Z

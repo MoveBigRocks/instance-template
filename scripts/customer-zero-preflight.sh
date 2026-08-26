@@ -21,7 +21,7 @@ for command in curl jq ruby oras cosign; do
 done
 
 if [[ -z "${VERSION}" ]]; then
-  VERSION=$(curl -fsSL https://api.github.com/repos/MoveBigRocks/platform/releases/latest | jq -r '.tag_name')
+  VERSION=$(curl -fsSL https://api.github.com/repos/MoveBigRocks/releases/releases/latest | jq -r '.tag_name')
 fi
 [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
   echo "invalid platform release version: ${VERSION}" >&2
